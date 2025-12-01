@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 // ⚠️ REMPLACE PAR TA VRAIE CLÉ API GROQ
-const GROQ_API_KEY = "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"; 
+const GROQ_API_KEY = "gsk_.............."; 
 
 const API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MODEL_ID = "llama-3.3-70b-versatile"; 
