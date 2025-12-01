@@ -5,7 +5,7 @@ import { AppState } from 'react-native';
 
 // ⚠️ REMPLACE CES VALEURS PAR CELLES DE TON DASHBOARD SUPABASE
 const supabaseUrl = 'https://tszwhzbmdboconntitfi.supabase.co'; 
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzendoemJtZGJvY29ubnRpdGZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3NjUxNjMsImV4cCI6MjA3OTM0MTE2M30.kn55Xge44uqpokbyI_BYEEBl4UCUSTSq5P2q-whJbAA'; // Copie ta clé "anon" / "public" ici
+const supabaseAnonKey = 'ApiKey...............'; // Copie ta clé "anon" / "public" ici
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
