@@ -2,6 +2,7 @@
   "expo": {
     "name": "NexusAiFit",
     "slug": "NexusAiFit",
+    "scheme":"nexusaifit",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -25,6 +26,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "extra": {
+      "supabaseUrl": "https://tszwhzbmdboconntitfi.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzendoemJtZGJvY29ubnRpdGZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3NjUxNjMsImV4cCI6MjA3OTM0MTE2M30.kn55Xge44uqpokbyI_BYEEBl4UCUSTSq5P2q-whJbAA"
     }
   }
 }
