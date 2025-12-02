@@ -9,13 +9,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../lib/theme';
-
-// --- AJOUT : Import du Hook de sauvegarde ---
 import { useWorkoutLogger } from '../hooks/useWorkoutLogger';
+import { useTranslation } from 'react-i18next'; // <-- NOUVEL IMPORT
 
 const { width } = Dimensions.get('window');
 
-// --- TYPES ---
+// --- TYPES (INCHANGÉS) ---
 type ExerciseItem = {
   name: string;
   sets: string | number;
@@ -37,8 +36,7 @@ type WorkoutPlan = {
 
 export default function WorkoutTrackerScreen() {
   const theme = useTheme();
-  
-  // --- AJOUT : Initialisation du Hook ---
+  const { t } = useTranslation(); // <-- HOOK
   const { saveWorkout, isSaving } = useWorkoutLogger();
 
   const [loading, setLoading] = useState(false);
@@ -55,7 +53,7 @@ export default function WorkoutTrackerScreen() {
   const fetchData = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.replace('/auth/index'); return; }
+      if (!session) { router.replace('/auth/index' as any); return; }
 
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
       if (profile) setUserProfile(profile);
@@ -121,9 +119,9 @@ export default function WorkoutTrackerScreen() {
             if (!error) { 
                 await fetchData(); 
                 setUserFocus(''); 
-                Alert.alert("Programme Prêt", "Votre semaine d'entraînement a été générée !");
+                Alert.alert(t('workout_tracker.alert_ready_title'), t('workout_tracker.alert_ready_msg'));
             } else {
-                Alert.alert("Erreur Base de données", error.message);
+                Alert.alert("Erreur", error.message);
             }
         } else {
              throw new Error("Format JSON invalide reçu de l'IA");
@@ -135,66 +133,56 @@ export default function WorkoutTrackerScreen() {
     }
   };
 
-  // --- AJOUT : Fonction pour sauvegarder la séance dans l'historique ---
   const handleFinishSession = async () => {
     if (!activePlan) return;
     
-    // Vérification basique
     const hasActivity = Object.values(completedExercises).some(v => v === true);
     if (!hasActivity) {
-        Alert.alert("Séance vide", "Cochez au moins un exercice avant de terminer.");
+        Alert.alert(t('workout_tracker.alert_empty_title'), t('workout_tracker.alert_empty_msg'));
         return;
     }
 
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // 1. Préparation des données
-    // On prend le jour actif (onglet sélectionné)
     const currentDay = activePlan.days[activeTab];
     const sessionName = currentDay.focus ? `${activePlan.title} - ${currentDay.focus}` : activePlan.title;
 
     const sessionData = {
         name: sessionName,
-        duration: 3600, // TODO: Connecter à un vrai timer
+        duration: 3600, 
         notes: sessionNote,
         sets: [] as any[]
     };
 
-    // 2. Récupération des exercices cochés pour CE jour
     currentDay.exercises.forEach((ex, index) => {
         const key = `day_${activeTab}_ex_${index}`;
-        
         if (completedExercises[key]) {
-            // Parsing sécurisé des sets/reps (au cas où ce soit des strings "3-4")
             const setsCount = parseInt(String(ex.sets)) || 3;
             const repsCount = parseInt(String(ex.reps)) || 10;
-            
-            // On ajoute une entrée pour chaque série
             for(let i=0; i < setsCount; i++) {
                 sessionData.sets.push({
                     exerciseName: ex.name,
                     reps: repsCount,
-                    weight: 0, // TODO: Demander le poids réel
-                    rpe: 8     // Difficulté moyenne par défaut
+                    weight: 0, 
+                    rpe: 8     
                 });
             }
         }
     });
 
-    // 3. Appel au Hook de sauvegarde
     const result = await saveWorkout(sessionData);
 
     if (result.success) {
         Alert.alert(
-            "Séance Enregistrée ! 🚀", 
-            "Bravo, votre historique a été mis à jour.",
+            t('workout_tracker.alert_saved_title'), 
+            t('workout_tracker.alert_saved_msg'),
             [
-                { text: "Voir l'historique", onPress: () => router.push('/features/workout_log') },
+                { text: t('workout_tracker.btn_history'), onPress: () => router.push('/features/workout_log' as any) },
                 { text: "OK", style: 'cancel' }
             ]
         );
     } else {
-        Alert.alert("Erreur", "Impossible de sauvegarder la séance : " + result.error);
+        Alert.alert("Erreur", "Impossible de sauvegarder : " + result.error);
     }
   };
 
@@ -235,7 +223,7 @@ export default function WorkoutTrackerScreen() {
       Linking.openURL(url);
   };
 
-  // --- STYLES DYNAMIQUES ---
+  // --- STYLES DYNAMIQUES (INCHANGÉS) ---
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
     safeArea: { flex: 1 },
@@ -280,7 +268,7 @@ export default function WorkoutTrackerScreen() {
     
     genBtn: { width: '100%', borderRadius: 16, overflow: 'hidden' },
     btnGradient: { padding: 18, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
-    genBtnText: { color: '#fff', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
+    btnGenText: { color: '#fff', fontWeight: '900', fontSize: 14, letterSpacing: 1 }, // Note: btnGenText dans le code précédent
   
     // Plan
     planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
@@ -357,7 +345,6 @@ export default function WorkoutTrackerScreen() {
         color: '#ef4444', fontSize: 10, fontWeight: 'bold', marginLeft: 4
     },
     
-    // --- AJOUT : Style du bouton de fin ---
     finishBtn: {
         backgroundColor: theme.colors.success, 
         padding: 16, 
@@ -384,16 +371,14 @@ export default function WorkoutTrackerScreen() {
   const renderGenerator = () => (
     <View style={styles.inputCard}>
         <MaterialCommunityIcons name="dumbbell" size={40} color={theme.colors.primary} style={{marginBottom: 15}} />
-        <Text style={styles.inputTitle}>GÉNÉRATEUR DE PROGRAMME</Text>
-        <Text style={styles.inputDesc}>
-            L'IA va créer une semaine d'entraînement adaptée à votre matériel ({userProfile?.equipment}) et votre niveau.
-        </Text>
+        <Text style={styles.inputTitle}>{t('workout_tracker.ia_title')}</Text>
+        <Text style={styles.inputDesc}>{t('workout_tracker.ia_desc')}</Text>
         
         <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>FOCUS PARTICULIER (Optionnel)</Text>
+            <Text style={styles.inputLabel}>{t('workout_tracker.label_focus')}</Text>
             <TextInput 
                 style={styles.textInput} 
-                placeholder="Ex: Pecs, Fessiers, Cardio, Dos large..." 
+                placeholder={t('workout_tracker.ph_focus')}
                 placeholderTextColor={theme.colors.textSecondary}
                 value={userFocus}
                 onChangeText={setUserFocus}
@@ -404,7 +389,7 @@ export default function WorkoutTrackerScreen() {
             {loading ? <ActivityIndicator color="#fff" /> : (
                 <LinearGradient colors={[theme.colors.primary, theme.colors.secondary]} start={{x:0, y:0}} end={{x:1, y:0}} style={styles.btnGradient}>
                     <MaterialCommunityIcons name="brain" size={20} color="#fff" style={{marginRight: 10}} />
-                    <Text style={styles.genBtnText}>GÉNÉRER LE PROGRAMME</Text>
+                    <Text style={styles.btnGenText}>{t('workout_tracker.btn_generate')}</Text>
                 </LinearGradient>
             )}
         </TouchableOpacity>
@@ -422,7 +407,7 @@ export default function WorkoutTrackerScreen() {
         <View style={styles.planHeader}>
             <View>
                 <Text style={styles.planName}>{activePlan?.title}</Text>
-                <Text style={styles.planSub}>{activePlan?.days.length} SÉANCES / SEMAINE</Text>
+                <Text style={styles.planSub}>{activePlan?.days.length} {t('workout_tracker.week_sessions')}</Text>
             </View>
             <TouchableOpacity onPress={handleGenerate} style={styles.regenBtnSmall}>
                 <MaterialCommunityIcons name="refresh" size={20} color={theme.colors.text} />
@@ -441,7 +426,7 @@ export default function WorkoutTrackerScreen() {
                         style={[styles.dayTab, activeTab === index && styles.dayTabActive]}
                     >
                         <Text style={[styles.dayText, activeTab === index && styles.dayTextActive]}>
-                            {day.day ? day.day.substring(0, 8) : `SÉANCE ${index+1}`}
+                            {day.day ? day.day.substring(0, 8) : `${t('workout_tracker.day_session')} ${index+1}`}
                         </Text>
                     </TouchableOpacity>
                 ))}
@@ -452,7 +437,7 @@ export default function WorkoutTrackerScreen() {
             <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
                  <Text style={styles.dayTitle}>{currentDay.focus || "Full Body"}</Text>
                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{currentDay.exercises.length} EXOS</Text>
+                    <Text style={styles.badgeText}>{currentDay.exercises.length} {t('workout_tracker.exos_count')}</Text>
                  </View>
             </View>
             
@@ -486,7 +471,7 @@ export default function WorkoutTrackerScreen() {
                                 onPress={() => openVideoDemo(ex.name)}
                             >
                                 <MaterialCommunityIcons name="youtube" size={14} color="#ef4444" />
-                                <Text style={styles.demoText}>DÉMO VIDÉO</Text>
+                                <Text style={styles.demoText}>{t('workout_tracker.btn_demo')}</Text>
                             </TouchableOpacity>
 
                         </View>
@@ -499,7 +484,6 @@ export default function WorkoutTrackerScreen() {
             })}
         </View>
 
-        {/* --- AJOUT : Bouton Terminer la séance --- */}
         <TouchableOpacity 
             style={styles.finishBtn}
             onPress={handleFinishSession}
@@ -507,13 +491,13 @@ export default function WorkoutTrackerScreen() {
         >
             {isSaving ? <ActivityIndicator color="#fff"/> : (
                 <Text style={styles.finishBtnText}>
-                    TERMINER LA SÉANCE
+                    {t('workout_tracker.btn_finish')}
                 </Text>
             )}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.regenBtn} onPress={handleGenerate}>
-            <Text style={styles.regenText}>GÉNÉRER UN NOUVEAU PROGRAMME</Text>
+            <Text style={styles.regenText}>{t('workout_tracker.btn_regen')}</Text>
         </TouchableOpacity>
 
         <View style={{height: 100}} />
@@ -537,7 +521,7 @@ export default function WorkoutTrackerScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.glassBtn}>
               <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>WORKOUT TRACKER</Text>
+          <Text style={styles.headerTitle}>{t('workout_tracker.title')}</Text>
           <View style={{width:40}}/>
         </View>
 

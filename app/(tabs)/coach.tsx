@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../../lib/theme';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useTranslation } from 'react-i18next'; // Import
 
 type Message = { id: string; text: string; sender: 'user' | 'ai'; timestamp: Date; };
 
@@ -16,11 +17,10 @@ export default function CoachScreen() {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation(); // Hook
   
-  // --- CALCUL PRÉCIS DE LA HAUTEUR DE LA BARRE DE NAV ---
-  // Doit correspondre exactement à la hauteur définie dans _layout.tsx
-  // 60 (hauteur de base) + (iOS ? insets.bottom : 10)
-  const TAB_BAR_HEIGHT = 60 + (Platform.OS === 'ios' ? insets.bottom : 10);
+  // On prend en compte la hauteur de la barre d'onglets flottante + une marge
+  const TAB_BAR_HEIGHT = 90 + (Platform.OS === 'ios' ? insets.bottom : 10);
   
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,8 +28,9 @@ export default function CoachScreen() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const flatListRef = useRef<FlatList>(null);
   
+  // Message d'intro par défaut
   const [messages, setMessages] = useState<Message[]>([
-      { id: '1', text: "Système NEXUS activé. Analyse biométrique en attente. Quelle est votre requête ?", sender: 'ai', timestamp: new Date() }
+      { id: '1', text: t('coach.intro'), sender: 'ai', timestamp: new Date() }
   ]);
 
   useFocusEffect(useCallback(() => { checkPremiumAccess(); }, []));
@@ -59,10 +60,11 @@ export default function CoachScreen() {
     setLoading(true);
     
     try {
-      const aiReply = await generateAIResponse("Tu es un coach sportif d'élite. Réponds de manière concise, motivante et précise.", userMsg);
-      setMessages(prev => [...prev, { id: (Date.now()+1).toString(), text: aiReply || "Connexion serveur instable.", sender: 'ai', timestamp: new Date() }]);
+      // Ici, on utilise un prompt système pour donner le rôle au coach
+      const aiReply = await generateAIResponse("Tu es un coach sportif d'élite (préparateur physique, nutritionniste, expert en bio-mécanique). Tes réponses doivent être concises, motivantes, précises et orientées vers l'action. Tu ne remplaces pas un médecin. Tu tutoies l'utilisateur.", userMsg);
+      setMessages(prev => [...prev, { id: (Date.now()+1).toString(), text: aiReply || t('coach.error_server'), sender: 'ai', timestamp: new Date() }]);
     } catch (error) { 
-        setMessages(prev => [...prev, { id: (Date.now()+1).toString(), text: "Erreur de communication avec le QG.", sender: 'ai', timestamp: new Date() }]);
+        setMessages(prev => [...prev, { id: (Date.now()+1).toString(), text: t('coach.error_network'), sender: 'ai', timestamp: new Date() }]);
     } finally { setLoading(false); }
   };
 
@@ -70,13 +72,14 @@ export default function CoachScreen() {
     container: { flex: 1, backgroundColor: theme.colors.bg },
     auroraBg: { ...StyleSheet.absoluteFillObject, zIndex: -1 },
     blob: { position: 'absolute', width: 300, height: 300, borderRadius: 150, opacity: 0.15 },
-
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 15, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
     headerTitle: { fontSize: 12, color: theme.colors.textSecondary, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
     headerSub: { fontSize: 20, fontWeight: '300', color: theme.colors.text, marginTop: 2 },
     statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.success, marginLeft: 8, marginTop: 4 },
-
-    listContent: { padding: 20, paddingBottom: 20 },
+    
+    // MODIFICATION : Padding du bas ajusté pour laisser la place à l'input
+    listContent: { padding: 20, paddingBottom: TAB_BAR_HEIGHT + 80 }, 
+    
     messageRow: { flexDirection: 'row', marginBottom: 20, alignItems: 'flex-end' },
     messageBubble: { maxWidth: '80%', padding: 16, borderRadius: 20 },
     userBubble: { backgroundColor: theme.colors.primary, borderBottomRightRadius: 2 },
@@ -84,19 +87,9 @@ export default function CoachScreen() {
     aiBubble: { backgroundColor: theme.colors.glass, borderWidth: 1, borderColor: theme.colors.border, borderBottomLeftRadius: 2 },
     aiText: { color: theme.colors.text, fontSize: 14, lineHeight: 20 },
     aiAvatar: { width: 28, height: 28, borderRadius: 10, backgroundColor: theme.colors.glass, justifyContent:'center', alignItems:'center', marginRight:10, borderWidth:1, borderColor: theme.colors.border },
-
-    // INPUT AREA CORRIGÉE
-    inputContainer: { 
-        width: '100%',
-        backgroundColor: theme.colors.bg, 
-        borderTopWidth: 1, 
-        borderTopColor: theme.colors.border,
-        paddingHorizontal: 15,
-        paddingTop: 15,
-        // C'EST ICI QUE LA MAGIE OPÈRE :
-        // On ajoute la hauteur de la TabBar comme padding bas + une petite marge (10px)
-        paddingBottom: TAB_BAR_HEIGHT + 10 
-    },
+    
+    // MODIFICATION : L'input est maintenant en position absolue en bas
+    inputContainer: { position: 'absolute', bottom: TAB_BAR_HEIGHT - 20, left: 0, right: 0, width: '100%', backgroundColor: theme.colors.bg, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingHorizontal: 15, paddingTop: 15, paddingBottom: 15 },
     glassInput: { flexDirection: 'row', alignItems: 'flex-end', backgroundColor: theme.colors.glass, borderRadius: 24, padding: 5, borderWidth: 1, borderColor: theme.colors.border, minHeight: 50 },
     input: { flex: 1, color: theme.colors.text, paddingHorizontal: 15, paddingVertical: 12, fontSize: 15, maxHeight: 100 },
     sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
@@ -119,8 +112,8 @@ export default function CoachScreen() {
             <SafeAreaView style={{flex:1}}>
                 <View style={styles.header}>
                     <View>
-                        <Text style={styles.headerTitle}>INTELLIGENCE</Text>
-                        <Text style={styles.headerSub}>Neural Coach</Text>
+                        <Text style={styles.headerTitle}>{t('tabs.neural')}</Text> 
+                        <Text style={styles.headerSub}>{t('dashboard.mod_coach')}</Text>
                     </View>
                 </View>
                 
@@ -128,13 +121,11 @@ export default function CoachScreen() {
                     <View style={styles.lockIconBox}>
                         <MaterialCommunityIcons name="lock" size={32} color="#FFD700" />
                     </View>
-                    <Text style={styles.lockedTitle}>ACCÈS CLASSÉ DÉFENSE</Text>
-                    <Text style={styles.lockedDesc}>
-                        Le Neural Coach analyse vos performances en temps réel. Cette technologie est réservée aux membres Elite.
-                    </Text>
-                    <TouchableOpacity style={styles.upgradeBtn} onPress={() => router.push('/profile')}>
+                    <Text style={styles.lockedTitle}>{t('coach.locked_title')}</Text>
+                    <Text style={styles.lockedDesc}>{t('coach.locked_desc')}</Text>
+                    <TouchableOpacity style={styles.upgradeBtn} onPress={() => router.push('/subscription' as any)}>
                         <LinearGradient colors={['#FFD700', '#FFA500']} start={{x:0, y:0}} end={{x:1, y:0}} style={styles.btnGradient}>
-                            <Text style={styles.btnText}>ACTIVER L'ACCÈS ELITE</Text>
+                            <Text style={styles.btnText}>{t('coach.btn_unlock')}</Text>
                         </LinearGradient>
                     </TouchableOpacity>
                 </View>
@@ -157,47 +148,47 @@ export default function CoachScreen() {
       <SafeAreaView style={{flex:1}} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
             <View>
-                <Text style={styles.headerTitle}>INTELLIGENCE</Text>
+                <Text style={styles.headerTitle}>{t('tabs.neural')}</Text>
                 <View style={{flexDirection:'row', alignItems:'center'}}>
-                    <Text style={styles.headerSub}>Neural Coach</Text>
+                    <Text style={styles.headerSub}>{t('dashboard.mod_coach')}</Text>
                     <View style={styles.statusDot} />
                 </View>
             </View>
             <TouchableOpacity><MaterialCommunityIcons name="dots-horizontal" size={24} color={theme.colors.textSecondary} /></TouchableOpacity>
         </View>
 
-        {/* KeyboardAvoidingView est le Parent Principal du contenu */}
         <KeyboardAvoidingView 
             style={{ flex: 1 }} 
-            behavior={Platform.OS === "ios" ? "padding" : "height"} 
-            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+            behavior={Platform.OS === "ios" ? "padding" : undefined} 
+            keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
         >
-            <FlatList
-              ref={flatListRef}
-              data={messages}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <View style={[styles.messageRow, { justifyContent: item.sender === 'user' ? 'flex-end' : 'flex-start' }]}>
-                    {item.sender === 'ai' && (
-                        <View style={styles.aiAvatar}>
-                            <MaterialCommunityIcons name="robot" size={16} color={theme.colors.primary}/>
+            <View style={{ flex: 1 }}>
+                <FlatList
+                  ref={flatListRef}
+                  data={messages}
+                  keyExtractor={item => item.id}
+                  renderItem={({ item }) => (
+                    <View style={[styles.messageRow, { justifyContent: item.sender === 'user' ? 'flex-end' : 'flex-start' }]}>
+                        {item.sender === 'ai' && (
+                            <View style={styles.aiAvatar}>
+                                <MaterialCommunityIcons name="robot" size={16} color={theme.colors.primary}/>
+                            </View>
+                        )}
+                        <View style={[styles.messageBubble, item.sender === 'user' ? styles.userBubble : styles.aiBubble]}>
+                            <Text style={item.sender === 'user' ? styles.userText : styles.aiText}>{item.text}</Text>
                         </View>
-                    )}
-                    <View style={[styles.messageBubble, item.sender === 'user' ? styles.userBubble : styles.aiBubble]}>
-                        <Text style={item.sender === 'user' ? styles.userText : styles.aiText}>{item.text}</Text>
                     </View>
-                </View>
-              )}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-            />
+                  )}
+                  contentContainerStyle={styles.listContent}
+                  showsVerticalScrollIndicator={false}
+                />
+            </View>
 
-            {/* Zone de saisie qui sera poussée par le clavier */}
             <View style={styles.inputContainer}>
                 <View style={styles.glassInput}>
                     <TextInput 
                         style={styles.input} 
-                        placeholder="Message..." 
+                        placeholder={t('coach.placeholder')} 
                         placeholderTextColor={theme.colors.textSecondary} 
                         value={input} 
                         onChangeText={setInput} 

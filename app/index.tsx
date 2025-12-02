@@ -10,10 +10,11 @@ import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import { Video, ResizeMode } from 'expo-av';
 import { useTheme } from '../lib/theme';
+import { useTranslation } from 'react-i18next'; // <-- NOUVEL IMPORT
 
 const { width, height } = Dimensions.get('window');
 
-// --- DATA STORYTELLING ---
+// --- DATA STORYTELLING (Non traduits pour la démo vidéo) ---
 const SLIDES = [
     {
         id: '1',
@@ -32,7 +33,6 @@ const SLIDES = [
 ];
 
 // --- COMPOSANTS UI ---
-
 const PricingCard = ({ tier, price, features, isPopular, onSelect }: any) => (
     <TouchableOpacity 
         activeOpacity={0.9} 
@@ -70,8 +70,11 @@ const FeatureBlock = ({ icon, title, text }: any) => (
     </View>
 );
 
-export default function AuthScreen() {
+export default function LandingScreen() {
   const router = useRouter();
+  const { t } = useTranslation(); // <-- HOOK TRADUCTION
+  const theme = useTheme();
+
   const [step, setStep] = useState<'INTRO' | 'AUTH'>('INTRO');
   const [isLogin, setIsLogin] = useState(false); 
   const [loading, setLoading] = useState(false);
@@ -84,10 +87,20 @@ export default function AuthScreen() {
 
   const handleMainAction = () => {
       if (Platform.OS !== 'web') Haptics.selectionAsync();
-      setStep('AUTH');
-      setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      // On redirige directement vers l'écran d'authentification
+      router.push('/auth/' as any); 
+  };
+  
+  const handleSelectPlan = () => {
+       if (Platform.OS !== 'web') Haptics.selectionAsync();
+       setStep('AUTH');
+       setTimeout(() => {
+           scrollViewRef.current?.scrollToEnd({ animated: true });
+       }, 100);
+  }
+
+  const scrollToAuth = () => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
   };
 
   const checkProfileAndRedirect = async (userId: string) => {
@@ -110,7 +123,7 @@ export default function AuthScreen() {
 
   const handleAuth = async () => {
     if (!email || !password) {
-        Alert.alert("Erreur", "Veuillez remplir tous les champs.");
+        Alert.alert(t('auth.error_title'), "Veuillez remplir tous les champs.");
         return;
     }
     
@@ -139,7 +152,7 @@ export default function AuthScreen() {
         }
       }
     } catch (error: any) {
-      Alert.alert("Erreur", error.message);
+      Alert.alert(t('auth.error_title'), error.message);
     } finally {
       setLoading(false);
     }
@@ -163,10 +176,6 @@ export default function AuthScreen() {
      } catch (e: any) {
         Alert.alert("Erreur Google", e.message);
      }
-  };
-
-  const scrollToAuth = () => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
   };
 
   const renderItem = ({ item, index }: any) => {
@@ -243,9 +252,7 @@ export default function AuthScreen() {
                     })}
                 </View>
 
-                {/* BOUTON FLOTTANT PRINCIPAL */}
-              
-
+                {/* BOUTON DÉFILEMENT */}
                 <TouchableOpacity style={styles.scrollDownBtn} onPress={scrollToAuth}>
                     <MaterialCommunityIcons name="chevron-down" size={30} color="rgba(255,255,255,0.5)" />
                 </TouchableOpacity>
@@ -253,10 +260,10 @@ export default function AuthScreen() {
 
             {/* 2. MANIFESTE */}
             <View style={styles.manifestoContainer}>
-                <Text style={styles.manifestoTitle}>L'IA NE DEVINE PAS.{"\n"}ELLE CALCULE.</Text>
-                <Text style={styles.manifestoText}>
-                    Nexus utilise vos données biologiques pour créer une stratégie chirurgicale.
-                </Text>
+                {/* Traduction ici */}
+                <Text style={styles.manifestoTitle}>{t('landing.title')}</Text> 
+                <Text style={styles.manifestoText}>{t('landing.subtitle')}</Text>
+                
                 <View style={styles.featuresGrid}>
                     <FeatureBlock icon="brain" title="NEURAL COACH" text="Une IA qui apprend de vos échecs pour garantir vos succès." />
                     <FeatureBlock icon="dna" title="BIO-HACKING" text="Sommeil, Stress, VFC. Maîtrisez vos variables invisibles." />
@@ -272,7 +279,7 @@ export default function AuthScreen() {
                     price="GRATUIT" 
                     features={['Podomètre & Métriques', 'Journal Hydratation', 'Suivi Poids', 'Chrono Simple', 'Accès Limité']}
                     isPopular={false}
-                    onSelect={handleMainAction}
+                    onSelect={handleSelectPlan}
                 />
 
                 <PricingCard 
@@ -280,7 +287,7 @@ export default function AuthScreen() {
                     price="5.99€" 
                     features={['Coach IA Illimité', 'Programmes Sportifs IA', 'Plan Nutritionnel IA', 'Bio-Tracking Complet', 'Outils Élite']}
                     isPopular={true}
-                    onSelect={handleMainAction}
+                    onSelect={handleSelectPlan}
                 />
             </View>
 
@@ -290,8 +297,9 @@ export default function AuthScreen() {
                 
                 <View style={{alignItems:'center', marginBottom: 30}}>
                     <MaterialCommunityIcons name="shield-account" size={50} color="#00f3ff" style={{opacity:0.8, marginBottom: 10}} />
-                    <Text style={styles.authTitle}>CONNEXION SÉCURISÉE</Text>
-                    <Text style={styles.authSub}>Identifiez-vous pour synchroniser vos données.</Text>
+                    {/* Traduction */}
+                    <Text style={styles.authTitle}>NEXUS.ID</Text>
+                    <Text style={styles.authSub}>{t('auth.subtitle')}</Text>
                 </View>
 
                 <View style={styles.authTabs}>
@@ -299,23 +307,26 @@ export default function AuthScreen() {
                         style={[styles.authTab, !isLogin && styles.authTabActive]} 
                         onPress={() => setIsLogin(false)}
                     >
-                        <Text style={[styles.authTabText, !isLogin && styles.authTabTextActive]}>S'INSCRIRE</Text>
+                        {/* Traduction */}
+                        <Text style={[styles.authTabText, !isLogin && styles.authTabTextActive]}>{t('auth.signup_action')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                         style={[styles.authTab, isLogin && styles.authTabActive]} 
                         onPress={() => setIsLogin(true)}
                     >
-                        <Text style={[styles.authTabText, isLogin && styles.authTabTextActive]}>SE CONNECTER</Text>
+                        {/* Traduction */}
+                        <Text style={[styles.authTabText, isLogin && styles.authTabTextActive]}>{t('auth.login_action')}</Text>
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.inputWrapper}>
-                    <Text style={styles.label}>IDENTIFIANT</Text>
+                    {/* Traduction */}
+                    <Text style={styles.label}>{t('auth.email_placeholder')}</Text>
                     <View style={styles.glassInput}>
                         <MaterialCommunityIcons name="email" size={20} color="#666" />
                         <TextInput 
                             style={styles.input} 
-                            placeholder="agent@nexus.com" 
+                            placeholder={t('auth.email_placeholder')} 
                             placeholderTextColor="#444"
                             autoCapitalize="none"
                             keyboardType="email-address"
@@ -326,7 +337,8 @@ export default function AuthScreen() {
                 </View>
 
                 <View style={styles.inputWrapper}>
-                    <Text style={styles.label}>CLÉ D'ACCÈS</Text>
+                    {/* Traduction */}
+                    <Text style={styles.label}>{t('auth.password_placeholder')}</Text>
                     <View style={styles.glassInput}>
                         <MaterialCommunityIcons name="lock" size={20} color="#666" />
                         <TextInput 
@@ -350,26 +362,30 @@ export default function AuthScreen() {
                             {agreeTerms && <Ionicons name="checkmark" size={14} color="#000" />}
                         </View>
                         <Text style={styles.termsText}>
-                            Je confirme que Nexus IA ne remplace pas un médecin et j'accepte les <Text style={styles.link} onPress={() => router.push('/legal')}>CGU</Text>.
+                            {/* Traduction */}
+                            {t('landing.legal')}
                         </Text>
                     </TouchableOpacity>
                 )}
 
                 <TouchableOpacity style={styles.mainBtn} onPress={handleAuth} disabled={loading}>
                     <LinearGradient colors={['#00f3ff', '#0066ff']} start={{x:0, y:0}} end={{x:1, y:0}} style={styles.btnGradient}>
-                        {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.mainBtnText}>{isLogin ? "LANCER LA SESSION" : "REJOINDRE L'ÉLITE"}</Text>}
+                        {/* Traduction */}
+                        {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.mainBtnText}>{isLogin ? t('auth.login_action') : t('auth.signup_action')}</Text>}
                     </LinearGradient>
                 </TouchableOpacity>
 
                 <View style={styles.dividerContainer}>
                     <View style={styles.line} />
-                    <Text style={styles.orText}>OU VIA</Text>
+                    {/* Traduction */}
+                    <Text style={styles.orText}>{t('auth.or')}</Text>
                     <View style={styles.line} />
                 </View>
 
                 <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleLogin}>
                     <Ionicons name="logo-google" size={20} color="#fff" style={{marginRight: 10}} />
-                    <Text style={styles.googleText}>Continuer avec Google</Text>
+                    {/* Traduction */}
+                    <Text style={styles.googleText}>{t('auth.google')}</Text>
                 </TouchableOpacity>
             </View>
 
@@ -394,6 +410,7 @@ export default function AuthScreen() {
   );
 }
 
+// --- STYLES IDENTIQUES À L'ORIGINE ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   safeArea: { flex: 1, paddingTop: Platform.OS === 'android' ? 25 : 0 },

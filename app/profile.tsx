@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -8,8 +8,9 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../lib/theme';
+import { useTranslation } from 'react-i18next';
+import i18n from '../lib/i18n'; // Import direct de l'instance i18n
 
-// Types complets correspondants à la base de données
 interface EditData {
   full_name: string;
   age: string;
@@ -26,12 +27,11 @@ interface EditData {
 export default function ProfileScreen() {
    const router = useRouter();
    const theme = useTheme();
+   const { t } = useTranslation();
    const [profile, setProfile] = useState<any>(null);
    const [editing, setEditing] = useState(false);
    const [loading, setLoading] = useState(false);
-   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
-  // État local pour l'édition
   const [editData, setEditData] = useState<EditData>({
     full_name: '', age: '', weight: '', height: '', gender: '',
     goal: '', activity_level: '', experience_level: '', equipment: '', training_days: ''
@@ -43,9 +43,7 @@ export default function ProfileScreen() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-
       const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-
       if (data) {
         setProfile(data);
         setEditData({
@@ -92,27 +90,25 @@ export default function ProfileScreen() {
       
       setProfile({ ...profile, ...updates });
       setEditing(false);
-      Alert.alert("Succès", "Profil mis à jour.");
+      Alert.alert(t('profile.alerts.success'), t('profile.alerts.saved'));
     } catch (error: any) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder.');
+      Alert.alert(t('profile.alerts.error'), 'Impossible de sauvegarder.');
     } finally {
       setLoading(false);
     }
   };
 
-  const updateTier = async (newTier: string) => {
-    setShowSubscriptionModal(false);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      await supabase.from('profiles').update({ tier: newTier }).eq('id', session.user.id);
-      setProfile({ ...profile, tier: newTier });
-      if (newTier === 'PREMIUM') Alert.alert("Bienvenue", "Accès Elite activé.");
-    } catch (e) { Alert.alert("Erreur", "Mise à jour impossible."); }
+  // --- NOUVEAU : Changement de langue ---
+  const toggleLanguage = () => {
+      if (Platform.OS !== 'web') Haptics.selectionAsync();
+      const current = i18n.language;
+      // Cycle: FR -> EN -> AR -> FR
+      const next = current === 'fr' ? 'en' : (current === 'en' ? 'ar' : 'fr');
+      i18n.changeLanguage(next);
   };
 
   const handleLogout = () => {
-      Alert.alert('Déconnexion', 'Confirmer ?', [
+      Alert.alert(t('profile.logout'), t('profile.alerts.confirm_logout'), [
           { text: 'Annuler', style: 'cancel' },
           { text: 'Oui', style: 'destructive', onPress: async () => {
               await supabase.auth.signOut();
@@ -121,8 +117,12 @@ export default function ProfileScreen() {
       ]);
   };
 
+  const handleDeactivate = () => Alert.alert("Action", "Compte désactivé (Simulé)");
+  const handleDelete = () => Alert.alert("Action", "Suppression (Simulé)");
+
   const isPremium = (profile?.tier || 'FREE') === 'PREMIUM';
   const tierColor = isPremium ? '#FFD700' : theme.colors.textSecondary;
+  const currentLevel = Math.floor((profile?.points || 0) / 1000) + 1;
   const currentStyles = styles(theme);
 
   return (
@@ -131,140 +131,127 @@ export default function ProfileScreen() {
       <SafeAreaView style={{flex:1}}>
         <ScrollView contentContainerStyle={currentStyles.content} showsVerticalScrollIndicator={false}>
           
-          {/* HEADER */}
           <View style={currentStyles.header}>
             <TouchableOpacity onPress={() => router.back()} style={currentStyles.iconBtn}>
               <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
             </TouchableOpacity>
-            <Text style={currentStyles.headerTitle}>MON PROFIL</Text>
+            <Text style={currentStyles.headerTitle}>{t('profile.title')}</Text>
             <TouchableOpacity onPress={() => setEditing(!editing)} style={currentStyles.iconBtn}>
               <Ionicons name={editing ? "checkmark" : "pencil"} size={20} color={editing ? theme.colors.success : theme.colors.text} />
             </TouchableOpacity>
           </View>
 
-          {/* IDENTITÉ VISUELLE */}
           <View style={currentStyles.idCard}>
-            <LinearGradient 
-                colors={isPremium ? ['#FFD700', '#FFA500'] : [theme.colors.border, theme.colors.glass]} 
-                style={currentStyles.avatarRing}
-            >
+            <LinearGradient colors={isPremium ? ['#FFD700', '#FFA500'] : [theme.colors.border, theme.colors.glass]} style={currentStyles.avatarRing}>
                 <View style={currentStyles.avatarContainer}>
-                    <Text style={currentStyles.avatarText}>
-                        {profile?.full_name ? profile.full_name.substring(0, 2).toUpperCase() : 'NX'}
-                    </Text>
+                    <Text style={currentStyles.avatarText}>{profile?.full_name ? profile.full_name.substring(0, 2).toUpperCase() : 'NX'}</Text>
                 </View>
             </LinearGradient>
-            <Text style={currentStyles.userName}>{profile?.full_name || 'Utilisateur'}</Text>
+            <Text style={currentStyles.userName}>{profile?.full_name || t('profile.default_name')}</Text>
             <View style={[currentStyles.badge, {borderColor: tierColor}]}>
-                <Text style={[currentStyles.badgeText, {color: tierColor}]}>{isPremium ? 'ELITE MEMBER' : 'STANDARD MEMBER'}</Text>
+                <Text style={[currentStyles.badgeText, {color: tierColor}]}>{isPremium ? t('profile.member_elite') : t('profile.member_standard')}</Text>
             </View>
           </View>
 
-          {/* FORMULAIRE COMPLET */}
-          <Text style={currentStyles.sectionTitle}>PHYSIQUE & SANTÉ</Text>
+          <View style={currentStyles.statsRow}>
+              <View style={currentStyles.statItem}>
+                  <Text style={currentStyles.statValue}>{profile?.streak || 0}</Text>
+                  <Text style={currentStyles.statLabel}>{t('profile.stat_streak')}</Text>
+              </View>
+              <View style={[currentStyles.statItem, {borderLeftWidth:1, borderRightWidth:1, borderColor:theme.colors.border}]}>
+                  <Text style={currentStyles.statValue}>{currentLevel}</Text>
+                  <Text style={currentStyles.statLabel}>{t('profile.stat_level')}</Text>
+              </View>
+              <View style={currentStyles.statItem}>
+                  <Text style={currentStyles.statValue}>{profile?.weight || '--'}</Text>
+                  <Text style={currentStyles.statLabel}>{t('profile.stat_weight')}</Text>
+              </View>
+          </View>
+
+          <Text style={currentStyles.sectionTitle}>{t('profile.section_sub')}</Text>
+          <TouchableOpacity activeOpacity={0.9} onPress={() => router.push('/subscription' as any)} style={currentStyles.subCard}>
+            <LinearGradient colors={isPremium ? ['#FFD700', '#B8860B'] : [theme.colors.glass, theme.colors.cardBg]} start={{x:0, y:0}} end={{x:1, y:1}} style={currentStyles.subGradient}>
+                <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start'}}>
+                    <MaterialCommunityIcons name="check-decagram" size={24} color={isPremium ? '#FFF' : theme.colors.textSecondary} />
+                    <Text style={[currentStyles.subPrice, isPremium && {color:'#FFF'}]}>{isPremium ? '5.99€' : t('profile.sub_free')}</Text>
+                </View>
+                <View>
+                    <Text style={[currentStyles.subName, isPremium && {color:'#FFF'}]}>{isPremium ? t('profile.member_elite') : t('profile.default_name')}</Text>
+                    <Text style={[currentStyles.subDesc, isPremium && {color:'rgba(255,255,255,0.8)'}]}>{isPremium ? t('profile.sub_manage') : t('profile.sub_action')}</Text>
+                </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <Text style={currentStyles.sectionTitle}>{t('profile.section_physique')}</Text>
           <View style={currentStyles.formContainer}>
               <View style={currentStyles.inputRow}>
                   <View style={{flex:1}}>
-                      <Text style={currentStyles.label}>POIDS (KG)</Text>
+                      <Text style={currentStyles.label}>{t('profile.label_weight')}</Text>
                       <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.weight} onChangeText={t => setEditData({...editData, weight: t})} editable={editing} keyboardType="numeric" />
                   </View>
                   <View style={{width:15}}/>
                   <View style={{flex:1}}>
-                      <Text style={currentStyles.label}>TAILLE (CM)</Text>
+                      <Text style={currentStyles.label}>{t('profile.label_height')}</Text>
                       <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.height} onChangeText={t => setEditData({...editData, height: t})} editable={editing} keyboardType="numeric" />
-                  </View>
-              </View>
-              <View style={{marginTop: 15}}>
-                  <Text style={currentStyles.label}>ÂGE</Text>
-                  <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.age} onChangeText={t => setEditData({...editData, age: t})} editable={editing} keyboardType="numeric" />
-              </View>
-          </View>
-
-          <Text style={currentStyles.sectionTitle}>CONFIGURATION SPORTIVE</Text>
-          <View style={currentStyles.formContainer}>
-              <View style={{marginBottom:15}}>
-                  <Text style={currentStyles.label}>NIVEAU D'EXPÉRIENCE</Text>
-                  <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.experience_level} onChangeText={t => setEditData({...editData, experience_level: t})} editable={editing} placeholder="Débutant, Intermédiaire..." placeholderTextColor={theme.colors.textSecondary} />
-              </View>
-              <View style={{marginBottom:15}}>
-                  <Text style={currentStyles.label}>MATÉRIEL DISPONIBLE</Text>
-                  <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.equipment} onChangeText={t => setEditData({...editData, equipment: t})} editable={editing} placeholder="Salle, Maison, Poids du corps..." placeholderTextColor={theme.colors.textSecondary} />
-              </View>
-              <View style={currentStyles.inputRow}>
-                  <View style={{flex:1}}>
-                      <Text style={currentStyles.label}>OBJECTIF</Text>
-                      <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.goal} onChangeText={t => setEditData({...editData, goal: t})} editable={editing} />
-                  </View>
-                  <View style={{width:15}}/>
-                  <View style={{flex:1}}>
-                      <Text style={currentStyles.label}>SÉANCES / SEM</Text>
-                      <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.training_days} onChangeText={t => setEditData({...editData, training_days: t})} editable={editing} keyboardType="numeric" />
                   </View>
               </View>
           </View>
 
           {editing && (
             <TouchableOpacity style={currentStyles.saveBtn} onPress={saveProfile} disabled={loading}>
-                <Text style={currentStyles.saveBtnText}>{loading ? 'SAUVEGARDE...' : 'ENREGISTRER LES MODIFICATIONS'}</Text>
+                <Text style={currentStyles.saveBtnText}>{loading ? t('profile.btn_saving') : t('profile.btn_save')}</Text>
             </TouchableOpacity>
           )}
 
-          {/* ABONNEMENT */}
-          <Text style={currentStyles.sectionTitle}>ABONNEMENT</Text>
-          <TouchableOpacity activeOpacity={0.9} onPress={() => setShowSubscriptionModal(true)} style={currentStyles.subCard}>
-            <LinearGradient colors={isPremium ? ['#FFD700', '#B8860B'] : [theme.colors.glass, theme.colors.cardBg]} start={{x:0, y:0}} end={{x:1, y:1}} style={currentStyles.subGradient}>
-                <View style={{flexDirection:'row', justifyContent:'space-between'}}>
-                    <MaterialCommunityIcons name="check-decagram" size={24} color={isPremium ? '#FFF' : theme.colors.textSecondary} />
-                    <Text style={[currentStyles.subPrice, isPremium && {color:'#FFF'}]}>{isPremium ? '5.99€' : 'GRATUIT'}</Text>
-                </View>
-                <View>
-                    <Text style={[currentStyles.subName, isPremium && {color:'#FFF'}]}>{isPremium ? 'NEXUS ELITE' : 'DÉCOUVERTE'}</Text>
-                    <Text style={[currentStyles.subDesc, isPremium && {color:'rgba(255,255,255,0.8)'}]}>{isPremium ? 'Accès illimité' : 'Accès limité. Touchez pour upgrader.'}</Text>
-                </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* ACTIONS */}
-          <Text style={currentStyles.sectionTitle}>PARAMÈTRES</Text>
+          <Text style={currentStyles.sectionTitle}>{t('profile.section_settings')}</Text>
           <View style={currentStyles.settingsContainer}>
               <TouchableOpacity style={currentStyles.settingRow} onPress={theme.toggleTheme}>
-                  <Text style={currentStyles.settingText}>Mode Sombre / Clair</Text>
+                  <Text style={currentStyles.settingText}>{t('profile.theme')}</Text>
                   <Ionicons name={theme.isDark ? "moon" : "sunny"} size={18} color={theme.colors.textSecondary} />
               </TouchableOpacity>
+
+              {/* BOUTON CHANGEMENT DE LANGUE (NOUVEAU) */}
+              <TouchableOpacity style={currentStyles.settingRow} onPress={toggleLanguage}>
+                  <Text style={currentStyles.settingText}>{t('profile.language')}</Text>
+                  <View style={{flexDirection:'row', alignItems:'center', gap:5}}>
+                      <Text style={{color:theme.colors.primary, fontWeight:'900', fontSize:12}}>{i18n.language.toUpperCase()}</Text>
+                      <Ionicons name="language" size={18} color={theme.colors.textSecondary} />
+                  </View>
+              </TouchableOpacity>
+
               <TouchableOpacity style={currentStyles.settingRow} onPress={() => router.push('/profile/support')}>
-                  <Text style={currentStyles.settingText}>Support & Aide</Text>
+                  <Text style={currentStyles.settingText}>{t('profile.support')}</Text>
                   <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
               </TouchableOpacity>
               <TouchableOpacity style={currentStyles.settingRow} onPress={() => router.push('/profile/legal')}>
-                  <Text style={currentStyles.settingText}>Mentions Légales & CGU</Text>
+                  <Text style={currentStyles.settingText}>{t('profile.legal')}</Text>
                   <Ionicons name="document-text-outline" size={18} color={theme.colors.textSecondary} />
               </TouchableOpacity>
-              <TouchableOpacity style={[currentStyles.settingRow, {borderBottomWidth:0}]} onPress={handleLogout}>
-                  <Text style={[currentStyles.settingText, {color: theme.colors.danger}]}>Déconnexion</Text>
+              <TouchableOpacity style={currentStyles.settingRow} onPress={handleLogout}>
+                  <Text style={[currentStyles.settingText, {color: theme.colors.danger}]}>{t('profile.logout')}</Text>
                   <MaterialCommunityIcons name="logout" size={18} color={theme.colors.danger} />
               </TouchableOpacity>
           </View>
 
+          <Text style={[currentStyles.sectionTitle, {color:theme.colors.danger, marginTop:30}]}>{t('profile.section_danger')}</Text>
+          <View style={[currentStyles.settingsContainer, {borderColor: theme.colors.danger+'50'}]}>
+              <TouchableOpacity style={currentStyles.settingRow} onPress={handleDeactivate}>
+                  <Text style={currentStyles.settingText}>{t('profile.deactivate')}</Text>
+                  <MaterialCommunityIcons name="pause-circle-outline" size={20} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[currentStyles.settingRow, {borderBottomWidth:0}]} onPress={handleDelete}>
+                  <Text style={[currentStyles.settingText, {color: theme.colors.danger}]}>{t('profile.delete')}</Text>
+                  <MaterialCommunityIcons name="delete-forever-outline" size={20} color={theme.colors.danger} />
+              </TouchableOpacity>
+          </View>
+
+          <View style={{padding: 20, alignItems: 'center', opacity: 0.6, marginTop: 20}}>
+              <Text style={{color: theme.colors.textSecondary, fontSize: 10, fontWeight: '900'}}>{t('profile.footer.version')}</Text>
+              <Text style={{color: theme.colors.textSecondary, fontSize: 8, marginTop: 5}}>{t('profile.footer.copyright')}</Text>
+          </View>
+
           <View style={{height: 50}}/>
         </ScrollView>
-
-        {/* MODAL */}
-        <Modal animationType="fade" transparent={true} visible={showSubscriptionModal} onRequestClose={() => setShowSubscriptionModal(false)}>
-            <View style={currentStyles.modalOverlay}>
-                <View style={currentStyles.modalContainer}>
-                    <Text style={currentStyles.modalTitle}>CHOISIR VOTRE NIVEAU</Text>
-                    <TouchableOpacity style={currentStyles.planOption} onPress={() => updateTier('FREE')}>
-                        <Text style={{color: theme.colors.textSecondary, fontWeight:'bold'}}>DÉCOUVERTE (Gratuit)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[currentStyles.planOption, {borderColor: '#FFD700', backgroundColor: theme.isDark ? '#FFD70020' : '#FFF8E1'}]} onPress={() => updateTier('PREMIUM')}>
-                        <Text style={{color: '#FFD700', fontWeight:'bold'}}>ELITE (5.99€/mois)</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={{marginTop:15}} onPress={() => setShowSubscriptionModal(false)}>
-                        <Text style={{color: theme.colors.textSecondary}}>Annuler</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-        </Modal>
       </SafeAreaView>
     </View>
   );
@@ -299,8 +286,8 @@ const styles = (theme: any) => StyleSheet.create({
     settingsContainer: { backgroundColor: theme.colors.glass, borderRadius: 20, paddingHorizontal: 20, borderWidth: 1, borderColor: theme.colors.border },
     settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
     settingText: { fontSize: 14, fontWeight: '600', color: theme.colors.text },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
-    modalContainer: { width: '85%', backgroundColor: theme.colors.cardBg, borderRadius: 24, padding: 25, alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
-    modalTitle: { fontSize: 16, fontWeight: '900', color: theme.colors.text, marginBottom: 20, letterSpacing: 1 },
-    planOption: { width: '100%', padding: 15, borderRadius: 12, borderWidth: 1, alignItems: 'center', marginBottom: 10 },
+    statsRow: { flexDirection: 'row', backgroundColor: theme.colors.glass, borderRadius: 16, padding: 15, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 30 },
+    statItem: { flex: 1, alignItems: 'center' },
+    statValue: { fontSize: 20, fontWeight: '900', color: theme.colors.text },
+    statLabel: { fontSize: 10, color: theme.colors.textSecondary, marginTop: 2, fontWeight: 'bold' },
 });

@@ -7,16 +7,17 @@ import { TouchableOpacity } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../lib/theme';
+import { useTranslation } from 'react-i18next'; // Import
 
 const { width } = Dimensions.get('window');
 
 export default function WorkoutLogScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const { t } = useTranslation(); // Hook
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<any[]>([]);
 
-  // Couleur du module (Cyan)
   const MODULE_COLOR = '#00f3ff';
 
   useFocusEffect(
@@ -30,16 +31,14 @@ export default function WorkoutLogScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      // On récupère tout l'historique
       const { data } = await supabase
         .from('workout_logs')
         .select('*')
         .eq('user_id', session.user.id)
         .order('log_date', { ascending: false })
-        .limit(20); // Les 20 dernières séances
+        .limit(20);
 
       if (data) {
-          // Traitement pour compter les exos validés
           const processedLogs = data.map(log => {
               const completedCount = log.exercises_status 
                 ? Object.values(log.exercises_status).filter(v => v === true).length
@@ -55,59 +54,27 @@ export default function WorkoutLogScreen() {
     }
   };
 
-  // --- STYLES DYNAMIQUES ---
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
     safeArea: { flex: 1 },
-    
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
     backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
     headerTitle: { color: theme.colors.text, fontWeight: 'bold', letterSpacing: 1 },
-
     content: { padding: 20 },
-
-    // Stats Summary
     statsContainer: { flexDirection: 'row', gap: 15, marginBottom: 25 },
-    statCard: { 
-        flex: 1, backgroundColor: theme.colors.glass, 
-        padding: 15, borderRadius: 16, 
-        borderWidth: 1, borderColor: theme.colors.border,
-        alignItems: 'center'
-    },
+    statCard: { flex: 1, backgroundColor: theme.colors.glass, padding: 15, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' },
     statValue: { fontSize: 24, fontWeight: '900', color: theme.colors.text },
     statLabel: { fontSize: 10, color: theme.colors.textSecondary, fontWeight: 'bold', marginTop: 5 },
-
-    // Timeline
     sectionTitle: { color: theme.colors.textSecondary, fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 15, marginLeft: 5 },
-    
-    logCard: { 
-        flexDirection: 'row', marginBottom: 15,
-        backgroundColor: theme.colors.glass,
-        borderRadius: 16, padding: 15,
-        borderWidth: 1, borderColor: theme.colors.border,
-        shadowColor: theme.isDark ? 'transparent' : '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
-    },
-    dateBox: { 
-        width: 50, height: 50, borderRadius: 12, 
-        backgroundColor: theme.isDark ? 'rgba(0, 243, 255, 0.1)' : '#e0f2fe', 
-        justifyContent: 'center', alignItems: 'center', marginRight: 15 
-    },
+    logCard: { flexDirection: 'row', marginBottom: 15, backgroundColor: theme.colors.glass, borderRadius: 16, padding: 15, borderWidth: 1, borderColor: theme.colors.border, shadowColor: theme.isDark ? 'transparent' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+    dateBox: { width: 50, height: 50, borderRadius: 12, backgroundColor: theme.isDark ? 'rgba(0, 243, 255, 0.1)' : '#e0f2fe', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
     dayText: { fontSize: 18, fontWeight: '900', color: MODULE_COLOR },
     monthText: { fontSize: 10, fontWeight: 'bold', color: MODULE_COLOR, textTransform: 'uppercase' },
-    
     logContent: { flex: 1, justifyContent: 'center' },
     logTitle: { color: theme.colors.text, fontWeight: 'bold', fontSize: 14, marginBottom: 4 },
     logSub: { color: theme.colors.textSecondary, fontSize: 12 },
-    
-    noteContainer: { 
-        marginTop: 10, padding: 10, 
-        backgroundColor: theme.colors.bg, 
-        borderRadius: 8, borderLeftWidth: 2, borderLeftColor: MODULE_COLOR 
-    },
+    noteContainer: { marginTop: 10, padding: 10, backgroundColor: theme.colors.bg, borderRadius: 8, borderLeftWidth: 2, borderLeftColor: MODULE_COLOR },
     noteText: { color: theme.colors.textSecondary, fontSize: 12, fontStyle: 'italic' },
-
     emptyState: { alignItems: 'center', marginTop: 50 },
     emptyText: { color: theme.colors.textSecondary, marginTop: 10, fontStyle: 'italic' }
   });
@@ -120,27 +87,26 @@ export default function WorkoutLogScreen() {
             <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                 <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>HISTORIQUE SÉANCES</Text>
+            <Text style={styles.headerTitle}>{t('history.title')}</Text>
             <View style={{ width: 40 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             
-            {/* Résumé Rapide */}
             <View style={styles.statsContainer}>
                 <View style={styles.statCard}>
                     <Text style={styles.statValue}>{logs.length}</Text>
-                    <Text style={styles.statLabel}>SÉANCES TOTALES</Text>
+                    <Text style={styles.statLabel}>{t('history.stats_total')}</Text>
                 </View>
                 <View style={styles.statCard}>
                     <Text style={[styles.statValue, {color: MODULE_COLOR}]}>
                         {logs.reduce((acc, curr) => acc + curr.completedCount, 0)}
                     </Text>
-                    <Text style={styles.statLabel}>EXERCICES VALIDÉS</Text>
+                    <Text style={styles.statLabel}>{t('history.stats_valid')}</Text>
                 </View>
             </View>
 
-            <Text style={styles.sectionTitle}>TIMELINE</Text>
+            <Text style={styles.sectionTitle}>{t('history.timeline')}</Text>
 
             {loading ? (
                 <ActivityIndicator size="large" color={MODULE_COLOR} style={{marginTop: 30}} />
@@ -158,10 +124,10 @@ export default function WorkoutLogScreen() {
                             
                             <View style={styles.logContent}>
                                 <Text style={styles.logTitle}>
-                                    {log.completedCount > 0 ? "Séance Active" : "Jour de Repos ?"}
+                                    {log.completedCount > 0 ? t('history.session_active') : t('history.session_rest')}
                                 </Text>
                                 <Text style={styles.logSub}>
-                                    {log.completedCount} exercices complétés
+                                    {log.completedCount} {t('history.completed_ex')}
                                 </Text>
                                 
                                 {log.session_note && log.session_note.trim() !== '' && (
@@ -178,7 +144,7 @@ export default function WorkoutLogScreen() {
             ) : (
                 <View style={styles.emptyState}>
                     <MaterialCommunityIcons name="dumbbell" size={48} color={theme.colors.textSecondary} style={{opacity: 0.5}} />
-                    <Text style={styles.emptyText}>Aucune séance enregistrée.</Text>
+                    <Text style={styles.emptyText}>{t('history.empty')}</Text>
                 </View>
             )}
 

@@ -9,12 +9,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../lib/theme';
+import { useTranslation } from 'react-i18next'; // Import
 
 const { width } = Dimensions.get('window');
 
 export default function NutritionScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation(); // Hook
   const [loading, setLoading] = useState(false);
   const [activePlan, setActivePlan] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -70,7 +72,7 @@ export default function NutritionScreen() {
     const todayIdx = getTodayIndex();
     if (dayIndex !== todayIdx) {
         if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert("Hors Zone", "Concentrez-vous sur le plan d'aujourd'hui.");
+        Alert.alert(t('nutrition.alert_zone'), t('nutrition.alert_zone_msg')); // TRADUCTION
         return;
     }
     if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -116,25 +118,22 @@ export default function NutritionScreen() {
                 setConsumedMeals({});
                 setDailyStats({ calories: 0, protein: 0 });
                 setPreferences('');
-                Alert.alert("Plan Prêt", "Nouveau menu généré.");
+                Alert.alert(t('nutrition.alert_title'), t('nutrition.alert_msg')); // TRADUCTION
             }
         }
-    } catch (e: any) { Alert.alert("Erreur", "Impossible de générer le plan."); } finally { setLoading(false); }
+    } catch (e: any) { Alert.alert(t('nutrition.alert_error'), e.message); } finally { setLoading(false); } // TRADUCTION
   };
 
-  // --- LA FONCTION MANQUANTE ---
   const renderGenerator = () => (
     <View style={styles.inputCard}>
         <MaterialCommunityIcons name="food-apple" size={48} color={theme.colors.success} style={{marginBottom: 15}} />
-        <Text style={styles.inputTitle}>DIÉTÉTICIEN IA</Text>
-        <Text style={styles.inputDesc}>
-            Générez une semaine de repas complète, adaptée à votre métabolisme et vos goûts.
-        </Text>
+        <Text style={styles.inputTitle}>{t('nutrition.ia_title')}</Text>
+        <Text style={styles.inputDesc}>{t('nutrition.ia_desc')}</Text>
         <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>PRÉFÉRENCES</Text>
+            <Text style={styles.inputLabel}>{t('nutrition.pref_label')}</Text>
             <TextInput 
                 style={styles.textInput} 
-                placeholder="Ex: Végétarien, Budget étudiant..." 
+                placeholder={t('nutrition.pref_ph')} 
                 placeholderTextColor={theme.colors.textSecondary}
                 value={preferences}
                 onChangeText={setPreferences}
@@ -144,7 +143,7 @@ export default function NutritionScreen() {
         <TouchableOpacity style={styles.genBtn} onPress={handleGenerate} disabled={loading}>
             {loading ? <ActivityIndicator color="#fff" /> : (
                 <LinearGradient colors={[theme.colors.success, '#10b981']} start={{x:0, y:0}} end={{x:1, y:0}} style={styles.btnGradient}>
-                    <Text style={styles.genBtnText}>GÉNÉRER LE PLAN</Text>
+                    <Text style={styles.genBtnText}>{t('nutrition.btn_generate')}</Text>
                 </LinearGradient>
             )}
         </TouchableOpacity>
@@ -167,10 +166,10 @@ export default function NutritionScreen() {
                     <Text style={styles.planTitle}>{activePlan.title}</Text>
                     <View style={{flexDirection:'row', gap:15, marginTop:5}}>
                         <Text style={[styles.planSub, {color: theme.colors.textSecondary}]}>
-                            CIBLE: <Text style={{color: theme.colors.text, fontWeight:'900'}}>{dayTarget}</Text> KCAL
+                            {t('nutrition.target')}: <Text style={{color: theme.colors.text, fontWeight:'900'}}>{dayTarget}</Text> KCAL
                         </Text>
                         <Text style={[styles.planSub, {color: theme.colors.success}]}>
-                            ACTUEL: {dailyStats.calories}
+                            {t('nutrition.consumed')}: {dailyStats.calories}
                         </Text>
                     </View>
                 </View>
@@ -246,6 +245,10 @@ export default function NutritionScreen() {
                 );
             })}
             
+            <TouchableOpacity style={styles.regenBtn} onPress={handleGenerate}>
+                <Text style={styles.regenText}>{t('nutrition.btn_regen')}</Text>
+            </TouchableOpacity>
+            
             <View style={{height:100}}/>
         </View>
     );
@@ -254,11 +257,9 @@ export default function NutritionScreen() {
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
     safeArea: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
+    header: { flexDirection: 'row', alignItems: 'center', padding: 20 },
     backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
     headerTitle: { color: theme.colors.text, fontWeight: '900', marginLeft: 15, letterSpacing: 1, fontSize: 16 },
-    headerSub: { color: theme.colors.textSecondary, fontSize: 10, fontWeight: 'bold' },
-    iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
     content: { padding: 20 },
     progressBarBg: { height: 8, backgroundColor: theme.colors.border, borderRadius: 4, overflow: 'hidden', marginTop: 10 },
     progressBarFill: { height: '100%', borderRadius: 4 },
@@ -295,18 +296,13 @@ export default function NutritionScreen() {
 
   return (
     <View style={styles.container}>
-      {/* CORRECTION ICI : Utilisation de 'style' au lieu de 'barStyle' pour expo-status-bar */}
-      <StatusBar style={theme.isDark ? "light" : "dark"} translucent={true} backgroundColor="transparent" />
-      
+      <StatusBar style={theme.isDark ? "light" : "dark"} />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-            <View>
-                <Text style={styles.headerTitle}>FUEL</Text>
-                <Text style={styles.headerSub}>Nutrition</Text>
-            </View>
-            <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/features/shopping')}>
-                <MaterialCommunityIcons name="cart-outline" size={18} color={theme.colors.text} />
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
             </TouchableOpacity>
+            <Text style={styles.headerTitle}>{t('nutrition.title')}</Text>
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             {activePlan ? renderPlan() : renderGenerator()}

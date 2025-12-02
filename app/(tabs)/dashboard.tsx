@@ -7,10 +7,10 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
+import { useTranslation } from 'react-i18next'; // Import
 
 const { width } = Dimensions.get('window');
-// Ajustement de la hauteur pour permettre au contenu de s'afficher
-const CARD_MIN_HEIGHT = 140; 
+const CARD_HEIGHT = 120;
 
 const ProgressWidget = ({ label, value, target, unit, icon, color, theme }: any) => {
     const percentage = target > 0 ? Math.min(value / target, 1) : 0;
@@ -42,10 +42,13 @@ const ProgressWidget = ({ label, value, target, unit, icon, color, theme }: any)
 export default function DashboardScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation(); // Hook
+  
   const [refreshing, setRefreshing] = useState(false);
   const [userName, setUserName] = useState('Athlète');
   const [activeWorkout, setActiveWorkout] = useState<any>(null);
   const [activeMealPlan, setActiveMealPlan] = useState<any>(null);
+  
   const [nutritionStats, setNutritionStats] = useState({ consumed: 0, target: 2500 });
   const [workoutStats, setWorkoutStats] = useState({ done: 0, target: 4 });
   const [weeklyWorkouts, setWeeklyWorkouts] = useState(0);
@@ -102,11 +105,11 @@ export default function DashboardScreen() {
         <ScrollView 
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }} // Ajout de padding en bas pour le scroll
+          contentContainerStyle={{ paddingBottom: 100 }}
         >
           <View style={currentStyles.header}>
             <View>
-              <Text style={currentStyles.greeting}>BONJOUR</Text>
+              <Text style={currentStyles.greeting}>{t('dashboard.greeting')}</Text>
               <Text style={currentStyles.username}>{userName}</Text>
             </View>
             <TouchableOpacity onPress={() => router.push('/profile')} style={currentStyles.profileBtn}>
@@ -115,14 +118,28 @@ export default function DashboardScreen() {
           </View>
 
           <View style={currentStyles.statsRow}>
-             <ProgressWidget label="NUTRITION" value={nutritionStats.consumed} target={nutritionStats.target} unit="Kcal" icon="fire" color={theme.colors.success} theme={theme} />
+             <ProgressWidget 
+                label={t('dashboard.stats_nutri')} 
+                value={nutritionStats.consumed} 
+                target={nutritionStats.target} 
+                unit={t('dashboard.unit_kcal')}
+                icon="fire" 
+                color={theme.colors.success} 
+                theme={theme}
+             />
              <View style={{width: 10}} />
-             <ProgressWidget label="ENTRAÎNEMENT" value={workoutStats.done} target={workoutStats.target} unit="S." icon="dumbbell" color={theme.colors.primary} theme={theme} />
+             <ProgressWidget 
+                label={t('dashboard.stats_work')} 
+                value={workoutStats.done} 
+                target={workoutStats.target} 
+                unit={t('dashboard.unit_sessions').includes('7') ? 'S.' : ''} 
+                icon="dumbbell" 
+                color={theme.colors.primary} 
+                theme={theme}
+             />
           </View>
 
-          <Text style={currentStyles.sectionTitle}>EN COURS</Text>
-          
-          {/* CARTE PRINCIPALE AVEC SCROLL INTERNE SI TEXTE TROP LONG */}
+          <Text style={currentStyles.sectionTitle}>{t('dashboard.section_active')}</Text>
           <TouchableOpacity 
             style={currentStyles.mainCard} 
             activeOpacity={0.9}
@@ -138,11 +155,11 @@ export default function DashboardScreen() {
                         <View style={currentStyles.mainCardContent}>
                             <View style={currentStyles.activeBadge}>
                                 <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFD700" />
-                                <Text style={currentStyles.badgeText}>PLAN ACTIF</Text>
+                                <Text style={currentStyles.badgeText}>{t('dashboard.active_badge')}</Text>
                             </View>
                             <Text style={currentStyles.mainCardTitle}>{activeWorkout.title}</Text>
                             <Text style={currentStyles.mainCardSub}>
-                                Focus {activeWorkout.days[0].focus} • {activeWorkout.days.length} séances
+                                {t('dashboard.card_focus')} {activeWorkout.days[0].focus} • {activeWorkout.days.length} {t('dashboard.card_sess')}
                             </Text>
                         </View>
                         <View style={currentStyles.arrowBtn}>
@@ -152,8 +169,8 @@ export default function DashboardScreen() {
                 ) : (
                     <>
                          <View style={currentStyles.mainCardContent}>
-                            <Text style={[currentStyles.mainCardTitle, {color: theme.colors.text}]}>Aucun programme</Text>
-                            <Text style={[currentStyles.mainCardSub, {color: theme.colors.textSecondary}]}>Créez votre plan personnalisé avec l'IA.</Text>
+                            <Text style={[currentStyles.mainCardTitle, {color: theme.colors.text}]}>{t('dashboard.no_plan_title')}</Text>
+                            <Text style={[currentStyles.mainCardSub, {color: theme.colors.textSecondary}]}>{t('dashboard.no_plan_desc')}</Text>
                         </View>
                         <View style={[currentStyles.arrowBtn, {backgroundColor: theme.colors.primary}]}>
                             <Ionicons name="add" size={20} color="#fff" />
@@ -163,7 +180,7 @@ export default function DashboardScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
-          <Text style={currentStyles.sectionTitle}>EXPLORER</Text>
+          <Text style={currentStyles.sectionTitle}>{t('dashboard.section_explore')}</Text>
           <View style={currentStyles.grid}>
             <TouchableOpacity style={currentStyles.gridItem} onPress={() => router.push('/features/nutrition-plan')}>
                 <View style={currentStyles.gridHeader}>
@@ -173,8 +190,8 @@ export default function DashboardScreen() {
                     <Ionicons name="arrow-forward" size={16} color={theme.colors.border} />
                 </View>
                 <View>
-                    <Text style={currentStyles.gridTitle}>Nutrition</Text>
-                    <Text style={currentStyles.gridSub}>{activeMealPlan ? "Plan actif" : "Générer"}</Text>
+                    <Text style={currentStyles.gridTitle}>{t('dashboard.mod_nutri')}</Text>
+                    <Text style={currentStyles.gridSub}>{activeMealPlan ? t('dashboard.mod_nutri_sub') : t('dashboard.mod_gen')}</Text>
                 </View>
             </TouchableOpacity>
 
@@ -186,8 +203,8 @@ export default function DashboardScreen() {
                     <Ionicons name="arrow-forward" size={16} color={theme.colors.border} />
                 </View>
                 <View>
-                    <Text style={currentStyles.gridTitle}>Bibliothèque</Text>
-                    <Text style={currentStyles.gridSub}>+200 mouvements</Text>
+                    <Text style={currentStyles.gridTitle}>{t('dashboard.mod_lib')}</Text>
+                    <Text style={currentStyles.gridSub}>{t('dashboard.mod_lib_sub')}</Text>
                 </View>
             </TouchableOpacity>
 
@@ -199,8 +216,8 @@ export default function DashboardScreen() {
                     <Ionicons name="arrow-forward" size={16} color={theme.colors.border} />
                 </View>
                 <View>
-                    <Text style={currentStyles.gridTitle}>Historique</Text>
-                    <Text style={currentStyles.gridSub}>Vos progrès</Text>
+                    <Text style={currentStyles.gridTitle}>{t('dashboard.mod_hist')}</Text>
+                    <Text style={currentStyles.gridSub}>{t('dashboard.mod_hist_sub')}</Text>
                 </View>
             </TouchableOpacity>
 
@@ -212,11 +229,13 @@ export default function DashboardScreen() {
                     <Ionicons name="arrow-forward" size={16} color={theme.colors.border} />
                 </View>
                 <View>
-                    <Text style={currentStyles.gridTitle}>Neural Coach</Text>
-                    <Text style={currentStyles.gridSub}>Discussion IA</Text>
+                    <Text style={currentStyles.gridTitle}>{t('dashboard.mod_coach')}</Text>
+                    <Text style={currentStyles.gridSub}>{t('dashboard.mod_coach_sub')}</Text>
                 </View>
             </TouchableOpacity>
           </View>
+          
+          <View style={{height: 40}} />
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -230,7 +249,6 @@ const styles = (theme: any) => StyleSheet.create({
     username: { fontSize: 20, fontWeight: '300', color: theme.colors.text, marginTop: 2 },
     profileBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
     sectionTitle: { fontSize: 11, fontWeight: '900', color: theme.colors.textSecondary, marginHorizontal: 20, marginBottom: 12, marginTop: 25, letterSpacing: 2 },
-    
     statsRow: { flexDirection: 'row', paddingHorizontal: 20 },
     widgetCard: { flex: 1, backgroundColor: theme.colors.glass, borderRadius: 20, padding: 16, borderWidth: 1 },
     widgetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -240,17 +258,14 @@ const styles = (theme: any) => StyleSheet.create({
     widgetTarget: { fontSize: 11, fontWeight: '600' },
     progressBg: { height: 4, backgroundColor: theme.colors.border, borderRadius: 2, overflow: 'hidden', marginTop: 8 },
     progressFill: { height: '100%', borderRadius: 2 },
-
-    // Carte Principale : Flexible en hauteur
-    mainCard: { marginHorizontal: 20, borderRadius: 20, overflow: 'hidden', minHeight: CARD_MIN_HEIGHT, marginBottom: 10 },
+    mainCard: { marginHorizontal: 20, borderRadius: 20, overflow: 'hidden', height: CARD_HEIGHT, marginBottom: 10 },
     mainCardGradient: { flex: 1, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    mainCardContent: { flex: 1, paddingRight: 10 }, // Espace pour ne pas toucher la flèche
+    mainCardContent: { flex: 1 },
     activeBadge: { flexDirection:'row', alignItems:'center', gap:4, marginBottom:6, backgroundColor:'rgba(0,0,0,0.2)', alignSelf:'flex-start', paddingHorizontal:8, paddingVertical:4, borderRadius:8 },
     badgeText: { color:'#FFD700', fontWeight:'900', fontSize:8 },
-    mainCardTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', lineHeight: 24 }, // Line height pour l'espacement
-    mainCardSub: { color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 4 },
-    arrowBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-
+    mainCardTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+    mainCardSub: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 4 },
+    arrowBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 10 },
     gridItem: { width: (width - 50) / 2, height: 110, backgroundColor: theme.colors.glass, borderRadius: 16, padding: 15, justifyContent: 'space-between', borderWidth: 1, borderColor: theme.colors.border },
     gridHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },

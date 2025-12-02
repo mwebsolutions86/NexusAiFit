@@ -8,12 +8,13 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../lib/theme';
+import { useTranslation } from 'react-i18next'; // Import
 
 const { width } = Dimensions.get('window');
 
 interface ModuleItem {
   id: string;
-  name: string;
+  name: string; // Ce champ est maintenant ignoré pour l'affichage, on utilise la clé id
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   color: string;
   status?: string;      
@@ -21,65 +22,63 @@ interface ModuleItem {
 }
 
 interface ModuleSection {
-  category: string;
+  categoryKey: string; // Clé de trad
   items: ModuleItem[];
 }
 
-// --- CONFIGURATION D'ACCÈS (INCHANGÉE) ---
 const ACCESS_RULES: any = {
     FREE: ['bmi', 'tdee', 'water', '1rm', 'timer', 'breath', 'exercise-library', 'shopping'],
     PREMIUM: ['all']
 };
 
-// --- LISTE DES MODULES (INCHANGÉE) ---
 const MODULES: ModuleSection[] = [
   {
-    category: "BIO-TRACKING",
+    categoryKey: "systems.categories.bio",
     items: [
-      { id: 'body_fat', name: 'Masse Grasse', icon: 'water-percent', color: '#ffaa00', status: 'PREMIUM' },
-      { id: 'water', name: 'Hydratation', icon: 'water', color: '#3b82f6', status: 'ACTIF' },
-      { id: 'tdee', name: 'Métabolisme', icon: 'fire', color: '#f97316', status: 'ACTIF' },
-      { id: 'bmi', name: 'Analyse IMC', icon: 'human-handsup', color: '#10b981', status: 'ACTIF' },
-      { id: 'sleep', name: 'Analyse Sommeil', icon: 'bed-clock', color: '#8b5cf6', status: 'PREMIUM' },
-      { id: 'stress', name: 'Niveau Stress', icon: 'brain', color: '#f59e0b', status: 'PREMIUM' },
-      { id: 'heart', name: 'Cardio Fréq.', icon: 'heart-pulse', color: '#ef4444', status: 'PREMIUM' },
-      { id: 'body', name: 'Body Battery', icon: 'lightning-bolt', color: '#22c55e', status: 'PREMIUM' },
+      { id: 'body_fat', name: '', icon: 'water-percent', color: '#ffaa00', status: 'PREMIUM' },
+      { id: 'water', name: '', icon: 'water', color: '#3b82f6', status: 'ACTIF' },
+      { id: 'tdee', name: '', icon: 'fire', color: '#f97316', status: 'ACTIF' },
+      { id: 'bmi', name: '', icon: 'human-handsup', color: '#10b981', status: 'ACTIF' },
+      { id: 'sleep', name: '', icon: 'bed-clock', color: '#8b5cf6', status: 'PREMIUM' },
+      { id: 'stress', name: '', icon: 'brain', color: '#f59e0b', status: 'PREMIUM' },
+      { id: 'heart', name: '', icon: 'heart-pulse', color: '#ef4444', status: 'PREMIUM' },
+      { id: 'body', name: '', icon: 'lightning-bolt', color: '#22c55e', status: 'PREMIUM' },
     ]
   },
   {
-    category: "PERFORMANCE",
+    categoryKey: "systems.categories.perf",
     items: [
-      { id: '1rm', name: 'Calculateur 1RM', icon: 'calculator', color: '#ec4899', status: 'ACTIF' },
-      { id: 'timer', name: 'Chrono Tactique', icon: 'timer-sand', color: '#6366f1', status: 'ACTIF' },
-      { id: 'workout_log', name: 'Historique Séances', icon: 'notebook-check', color: '#00f3ff', status: 'PREMIUM' },
-      { id: 'reflex', name: 'Test Réflexes', icon: 'cursor-default-click', color: '#eab308', status: 'PREMIUM' },
-      { id: 'vision', name: 'Vision Focus', icon: 'eye-circle', color: '#00f3ff', status: 'PREMIUM' },
-      { id: 'posture', name: 'Analyse Posture', icon: 'human-male', color: '#6366f1', status: 'PREMIUM' },
+      { id: '1rm', name: '', icon: 'calculator', color: '#ec4899', status: 'ACTIF' },
+      { id: 'timer', name: '', icon: 'timer-sand', color: '#6366f1', status: 'ACTIF' },
+      { id: 'workout_log', name: '', icon: 'notebook-check', color: '#00f3ff', status: 'PREMIUM' },
+      { id: 'reflex', name: '', icon: 'cursor-default-click', color: '#eab308', status: 'PREMIUM' },
+      { id: 'vision', name: '', icon: 'eye-circle', color: '#00f3ff', status: 'PREMIUM' },
+      { id: 'posture', name: '', icon: 'human-male', color: '#6366f1', status: 'PREMIUM' },
     ]
   },
   {
-    category: "NUTRITION",
+    categoryKey: "systems.categories.nutri",
     items: [
-      { id: 'macros', name: 'Calculateur Macros', icon: 'nutrition', color: '#f97316', status: 'PREMIUM' },
-      { id: 'shopping', name: 'Liste Courses', icon: 'cart-variant', color: '#10b981', status: 'ACTIF' },
-      { id: 'supps', name: 'Stack Suppléments', icon: 'bottle-tonic-plus', color: '#6366f1', status: 'PREMIUM' },
-      { id: 'fasting', name: 'Jeûne Intermit.', icon: 'clock-fast', color: '#14b8a6', status: 'PREMIUM' },
-      { id: 'meal_prep', name: 'Chef Meal Prep', icon: 'chef-hat', color: '#f43f5e', status: 'PREMIUM' },
+      { id: 'macros', name: '', icon: 'nutrition', color: '#f97316', status: 'PREMIUM' },
+      { id: 'shopping', name: '', icon: 'cart-variant', color: '#10b981', status: 'ACTIF' },
+      { id: 'supps', name: '', icon: 'bottle-tonic-plus', color: '#6366f1', status: 'PREMIUM' },
+      { id: 'fasting', name: '', icon: 'clock-fast', color: '#14b8a6', status: 'PREMIUM' },
+      { id: 'meal_prep', name: '', icon: 'chef-hat', color: '#f43f5e', status: 'PREMIUM' },
     ]
   },
   {
-    category: "RÉCUPÉRATION & BIO-HACKING",
+    categoryKey: "systems.categories.recup",
     items: [
-      { id: 'breath', name: 'Respiration', icon: 'weather-windy', color: '#a855f7', status: 'ACTIF' },
-      { id: 'stretching', name: 'Routine Souplesse', icon: 'yoga', color: '#2dd4bf', status: 'PREMIUM' },
-      { id: 'mood', name: 'État Neural', icon: 'emoticon-happy', color: '#eab308', status: 'PREMIUM' },
-      { id: 'meditation', name: 'Méditation Zen', icon: 'meditation', color: '#8b5cf6', status: 'PREMIUM' },
-      { id: 'journaling', name: 'Journal de Bord', icon: 'book-open-variant', color: '#6366f1', status: 'PREMIUM' },
-      { id: 'cold', name: 'Suivi Froid', icon: 'snowflake', color: '#0ea5e9', status: 'PREMIUM' },
-      { id: 'nootropics', name: 'Guide Nootropiques', icon: 'pill', color: '#8b5cf6', status: 'PREMIUM' },
-      { id: 'env', name: 'Scanner Environ.', icon: 'radar', color: '#06b6d4', status: 'PREMIUM' },
-      { id: 'hrv', name: 'Optimisation VFC', icon: 'sine-wave', color: '#d946ef', status: 'PREMIUM' },
-      { id: 'discharge', name: 'Neuro-Décharge', icon: 'flash-off', color: '#94a3b8', status: 'PREMIUM' },
+      { id: 'breath', name: '', icon: 'weather-windy', color: '#a855f7', status: 'ACTIF' },
+      { id: 'stretching', name: '', icon: 'yoga', color: '#2dd4bf', status: 'PREMIUM' },
+      { id: 'mood', name: '', icon: 'emoticon-happy', color: '#eab308', status: 'PREMIUM' },
+      { id: 'meditation', name: '', icon: 'meditation', color: '#8b5cf6', status: 'PREMIUM' },
+      { id: 'journaling', name: '', icon: 'book-open-variant', color: '#6366f1', status: 'PREMIUM' },
+      { id: 'cold', name: '', icon: 'snowflake', color: '#0ea5e9', status: 'PREMIUM' },
+      { id: 'nootropics', name: '', icon: 'pill', color: '#8b5cf6', status: 'PREMIUM' },
+      { id: 'env', name: '', icon: 'radar', color: '#06b6d4', status: 'PREMIUM' },
+      { id: 'hrv', name: '', icon: 'sine-wave', color: '#d946ef', status: 'PREMIUM' },
+      { id: 'discharge', name: '', icon: 'flash-off', color: '#94a3b8', status: 'PREMIUM' },
     ]
   }
 ];
@@ -87,6 +86,7 @@ const MODULES: ModuleSection[] = [
 export default function Systems() {
   const router = useRouter();
   const theme = useTheme();
+  const { t } = useTranslation(); // Hook
   const [search, setSearch] = useState('');
   const [userTier, setUserTier] = useState('FREE');
 
@@ -124,18 +124,18 @@ export default function Systems() {
     if (Platform.OS !== 'web') Haptics.selectionAsync();
     
     if (module.comingSoon) {
-        Alert.alert("Bientôt", "Module en cours de développement.");
+        Alert.alert(t('systems.soon_title'), t('systems.soon_msg'));
         return;
     }
 
     if (isLocked(module.id, false)) {
         if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert(
-            "MODULE PREMIUM", 
-            `Passez à la version Elite pour débloquer ${module.name}.`,
+            t('systems.locked_alert'), 
+            t('systems.locked_msg'),
             [
                 { text: "Annuler", style: "cancel" },
-                { text: "DÉBLOQUER", onPress: () => router.push('/profile' as any) } 
+                { text: t('systems.btn_unlock'), onPress: () => router.push('/subscription' as any) } 
             ]
         );
         return;
@@ -183,17 +183,14 @@ export default function Systems() {
     
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
     
-    // --- DESIGN LUXE ADAPTATIF ---
     moduleCard: { 
         width: (width - 52) / 2, 
         height: 110, 
         borderRadius: 20, 
         overflow: 'hidden', 
         borderWidth: 1, 
-        // Bordure plus visible en mode clair
         borderColor: theme.isDark ? theme.colors.border : '#E5E7EB', 
         backgroundColor: theme.colors.glass, 
-        // Ombres renforcées en mode clair pour détacher la carte
         shadowColor: theme.isDark ? 'transparent' : '#000', 
         shadowOffset: { width: 0, height: 4 }, 
         shadowOpacity: theme.isDark ? 0 : 0.08, 
@@ -226,11 +223,11 @@ export default function Systems() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
             <View>
-                <Text style={styles.headerTitle}>SYSTÈMES</Text>
-                <Text style={styles.headerSub}>Centre de Commande</Text>
+                <Text style={styles.headerTitle}>{t('systems.title')}</Text>
+                <Text style={styles.headerSub}>{t('systems.subtitle')}</Text>
             </View>
             <View style={styles.tierBadge}>
-                <Text style={styles.tierText}>{userTier === 'PREMIUM' ? 'ELITE' : 'STANDARD'}</Text>
+                <Text style={styles.tierText}>{userTier === 'PREMIUM' ? t('profile.member_elite') : t('profile.member_standard')}</Text>
             </View>
         </View>
 
@@ -238,7 +235,7 @@ export default function Systems() {
             <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
             <TextInput 
                 style={styles.searchInput} 
-                placeholder="Rechercher un protocole..." 
+                placeholder={t('systems.search_ph')} // Traduction
                 placeholderTextColor={theme.colors.textSecondary} 
                 value={search} 
                 onChangeText={setSearch} 
@@ -250,11 +247,13 @@ export default function Systems() {
                 <View key={index} style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <View style={styles.line} />
-                        <Text style={styles.sectionTitle}>{section.category}</Text>
+                        <Text style={styles.sectionTitle}>{t(section.categoryKey)}</Text>
                     </View>
                     <View style={styles.grid}>
-                        {section.items.filter(i => i.name.toLowerCase().includes(search.toLowerCase())).map((item, i) => {
+                        {section.items.filter(i => t(`systems.modules.${i.id}`).toLowerCase().includes(search.toLowerCase())).map((item, i) => {
                             const locked = isLocked(item.id, item.comingSoon);
+                            // Récupération dynamique du nom traduit
+                            const localizedName = t(`systems.modules.${item.id}`);
                             return (
                                 <TouchableOpacity 
                                     key={i} 
@@ -263,17 +262,16 @@ export default function Systems() {
                                         locked && {
                                             opacity: 0.8, 
                                             borderColor: theme.colors.border,
-                                            backgroundColor: theme.isDark ? 'rgba(255,255,255,0.02)' : '#F3F4F6' // Fond grisé pour locked en mode clair
+                                            backgroundColor: theme.isDark ? 'rgba(255,255,255,0.02)' : '#F3F4F6' 
                                         }
                                     ]} 
                                     onPress={() => handlePress(item)} 
                                     activeOpacity={0.8}
                                 >
                                     <LinearGradient 
-                                        // --- DÉGRADÉ ADAPTATIF LUXE ---
                                         colors={theme.isDark 
                                             ? (locked ? ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.02)'] : ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)']) 
-                                            : (locked ? ['transparent', 'transparent'] : ['#ffffff', 'rgba(255,255,255,0.5)']) // Blanc pur vers léger transp. pour mode clair
+                                            : (locked ? ['transparent', 'transparent'] : ['#ffffff', 'rgba(255,255,255,0.5)']) 
                                         }
                                         style={styles.cardContent}
                                     >
@@ -294,7 +292,9 @@ export default function Systems() {
                                                      </View>
                                                 )}
                                             </View>
-                                            <Text style={[styles.moduleName, locked && styles.lockedText]} numberOfLines={2}>{item.name}</Text>
+                                            <Text style={[styles.moduleName, locked && styles.lockedText]} numberOfLines={2}>
+                                                {localizedName}
+                                            </Text>
                                     </LinearGradient>
                                 </TouchableOpacity>
                             );
