@@ -1,399 +1,260 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Dimensions, Platform, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { supabase } from '../../lib/supabase';
-import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../lib/theme';
+import { supabase } from '../../lib/supabase';
 
 const { width } = Dimensions.get('window');
+// Ajustement de la hauteur pour permettre au contenu de s'afficher
+const CARD_MIN_HEIGHT = 140; 
 
-export default function Dashboard() {
-  const router = useRouter();
+const ProgressWidget = ({ label, value, target, unit, icon, color, theme }: any) => {
+    const percentage = target > 0 ? Math.min(value / target, 1) : 0;
+    return (
+        <View style={[styles(theme).widgetCard, {borderColor: color + '40'}]}>
+            <View style={styles(theme).widgetHeader}>
+                <View style={[styles(theme).iconBox, {backgroundColor: color + '20'}]}>
+                    <MaterialCommunityIcons name={icon} size={18} color={color} />
+                </View>
+                <Text style={[styles(theme).widgetLabel, {color: theme.colors.textSecondary}]}>{label}</Text>
+            </View>
+            <View style={{marginTop: 15}}>
+                <View style={{flexDirection:'row', alignItems:'baseline', marginBottom: 5}}>
+                    <Text style={[styles(theme).widgetValue, {color: theme.colors.text}]}>{value}</Text>
+                    <Text style={[styles(theme).widgetTarget, {color: theme.colors.textSecondary}]}> / {target} {unit}</Text>
+                </View>
+                <View style={styles(theme).progressBg}>
+                    <LinearGradient
+                        colors={[color, color + '80']}
+                        start={{x:0, y:0}} end={{x:1, y:0}}
+                        style={[styles(theme).progressFill, {width: `${percentage * 100}%`}]}
+                    />
+                </View>
+            </View>
+        </View>
+    );
+};
+
+export default function DashboardScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
+  const [userName, setUserName] = useState('Athlète');
+  const [activeWorkout, setActiveWorkout] = useState<any>(null);
+  const [activeMealPlan, setActiveMealPlan] = useState<any>(null);
+  const [nutritionStats, setNutritionStats] = useState({ consumed: 0, target: 2500 });
+  const [workoutStats, setWorkoutStats] = useState({ done: 0, target: 4 });
+  const [weeklyWorkouts, setWeeklyWorkouts] = useState(0);
 
-  const [stats, setStats] = useState({
-    workoutProgress: 0,
-    nutritionProgress: 0,
-    calories: 0,
-    caloriesTarget: 2500,
-    nextWorkout: 'Repos / Aucun Plan',
-    workoutName: 'AUCUN PROGRAMME',
-  });
+  useFocusEffect(useCallback(() => { loadDashboardData(); }, []));
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchDashboardData();
-    }, [])
-  );
-
-  const fetchDashboardData = async () => {
+  const loadDashboardData = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       const userId = session.user.id;
-      const todayStr = new Date().toISOString().split('T')[0];
 
-      // 1. Charger le profil
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', userId).single();
+      if (profile?.full_name) setUserName(profile.full_name.split(' ')[0]);
 
-      if (userProfile) {
-          setProfile(userProfile);
-          await updateStreakLogic(userId, userProfile);
-      }
+      const { data: workout } = await supabase.from('workout_plans').select('title, content').eq('user_id', userId).eq('is_active', true).maybeSingle();
+      setActiveWorkout(workout ? workout.content : null);
 
-      // 2. CALCULS (Nutrition & Sport)
-      let calConsumed = 0;
-      let calTarget = 2500;
-      let nutProgress = 0;
-      let workProgress = 0;
-      let sessionName = "Repos / Libre";
-      let planName = "AUCUN PROGRAMME";
+      const { data: meal } = await supabase.from('meal_plans').select('title, content').eq('user_id', userId).eq('is_active', true).maybeSingle();
+      setActiveMealPlan(meal ? meal.content : null);
 
-      const { data: mealPlan } = await supabase.from('meal_plans').select('content').eq('user_id', userId).eq('is_active', true).limit(1).maybeSingle();
-      const { data: foodLog } = await supabase.from('nutrition_logs').select('meals_status').eq('user_id', userId).eq('log_date', todayStr).maybeSingle();
-
-      if (mealPlan?.content?.days) {
-          const dayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
-          const currentDayPlan = mealPlan.content.days[dayIndex % mealPlan.content.days.length];
-          if (currentDayPlan) {
-              let dailyTotal = parseInt(currentDayPlan.total_calories);
-              if (!dailyTotal || isNaN(dailyTotal)) {
-                   if (currentDayPlan.meals) dailyTotal = currentDayPlan.meals.reduce((acc:any, m:any) => acc + (parseInt(m.calories)||0), 0);
-              }
-              calTarget = dailyTotal > 0 ? dailyTotal : 2500;
-              if (foodLog?.meals_status && currentDayPlan.meals) {
-                  currentDayPlan.meals.forEach((meal: any) => {
-                      if (foodLog.meals_status[meal.type]) calConsumed += parseInt(meal.calories) || 0;
-                  });
-              }
-          }
-      }
-      nutProgress = Math.min((calConsumed / calTarget) * 100, 100);
-
-      const { data: workoutPlan } = await supabase.from('workout_plans').select('content, title').eq('user_id', userId).eq('is_active', true).limit(1).maybeSingle();
-      if (workoutPlan?.content?.days) {
-          planName = workoutPlan.title || "Programme Perso";
-          const dayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
-          const currentWorkoutDay = workoutPlan.content.days[dayIndex % workoutPlan.content.days.length];
-          if (currentWorkoutDay) {
-              sessionName = currentWorkoutDay.focus || "Full Body";
-              const { data: workoutLog } = await supabase.from('workout_logs').select('exercises_status').eq('user_id', userId).eq('log_date', todayStr).maybeSingle();
-              const totalExercises = currentWorkoutDay.exercises?.length || 0;
-              let completedExercises = 0;
-              if (workoutLog?.exercises_status && totalExercises > 0) {
-                  completedExercises = Object.values(workoutLog.exercises_status).filter(v => v === true).length;
-                  workProgress = Math.min((completedExercises / totalExercises) * 100, 100);
-              }
-          }
-      }
-
-      setStats({
-        workoutProgress: workProgress,
-        nutritionProgress: nutProgress,
-        calories: calConsumed,
-        caloriesTarget: calTarget,
-        nextWorkout: sessionName,
-        workoutName: planName
-      });
-
-    } catch (error) {
-      console.log('Erreur dashboard', error);
-    }
-  };
-
-  const updateStreakLogic = async (userId: string, currentProfile: any) => {
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
+      const today = new Date().toISOString().split('T')[0];
+      const { data: nutLog } = await supabase.from('nutrition_logs').select('total_calories').eq('user_id', userId).eq('log_date', today).maybeSingle();
       
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const todayIndex = (new Date().getDay() + 6) % 7; 
+      let dailyGoal = 2000;
 
-      const lastActive = currentProfile.last_active_date;
-      let newStreak = currentProfile.streak || 0;
-      let shouldUpdate = false;
-
-      const { data: hasSport } = await supabase.from('workout_logs').select('id').eq('user_id', userId).eq('log_date', todayStr).maybeSingle();
-      const { data: hasFood } = await supabase.from('nutrition_logs').select('id').eq('user_id', userId).eq('log_date', todayStr).maybeSingle();
-
-      const isActiveToday = !!hasSport || !!hasFood;
-
-      if (isActiveToday) {
-          if (lastActive !== todayStr) {
-              if (lastActive === yesterdayStr) {
-                  newStreak += 1;
-              } else {
-                  newStreak = 1; 
-              }
-              shouldUpdate = true;
-          }
-      } else {
-          if (lastActive && lastActive < yesterdayStr && newStreak > 0) {
-              newStreak = 0; 
-              shouldUpdate = true;
-          }
+      if (meal?.content?.days && meal.content.days[todayIndex]) {
+          const dayPlan = meal.content.days[todayIndex];
+          const sumPlan = dayPlan.meals.reduce((acc: number, m: any) => acc + (parseInt(m.calories) || 0), 0);
+          if (sumPlan > 0) dailyGoal = sumPlan;
       }
 
-      if (shouldUpdate) {
-          await supabase.from('profiles').update({
-              streak: newStreak,
-              last_active_date: isActiveToday ? todayStr : lastActive 
-          }).eq('id', userId);
-          
-          setProfile({ ...currentProfile, streak: newStreak });
-      }
-  };
+      setNutritionStats({ consumed: nutLog?.total_calories || 0, target: dailyGoal });
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await fetchDashboardData();
-    setRefreshing(false);
-  };
-
-  const handleNav = (path: any) => {
-    if (Platform.OS !== 'web') Haptics.selectionAsync();
-    router.push(path);
-  };
-
-  // --- GESTION ACCÈS PREMIUM ---
-  const isPremiumUser = () => {
-      const tier = (profile?.tier || 'FREE').toUpperCase();
-      return ['PREMIUM', 'ELITE', 'AVANCE', 'ESSENTIEL'].includes(tier);
-  };
-
-  const handleLockedNav = (path: string) => {
-      if (Platform.OS !== 'web') Haptics.selectionAsync();
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const { count } = await supabase.from('workout_logs').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('log_date', sevenDaysAgo.toISOString());
       
-      if (isPremiumUser()) {
-          router.push(path as any);
-      } else {
-          if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          Alert.alert(
-            "MODULE PREMIUM",
-            "Cette fonctionnalité est réservée aux membres Premium.",
-            [
-                { text: "Annuler", style: "cancel" },
-                { text: "DÉBLOQUER", onPress: () => router.push('/profile' as any) }
-            ]
-          );
-      }
+      setWeeklyWorkouts(count || 0);
+      const targetSessions = workout?.content?.days?.length || 4;
+      setWorkoutStats({ done: count || 0, target: targetSessions });
+
+    } catch (error) { console.log('Erreur Dashboard:', error); } finally { setRefreshing(false); }
   };
 
-  const currentPoints = profile?.points || 0;
-  const currentLevel = Math.floor(currentPoints / 1000) + 1;
-  const pointsForNextLevel = 1000;
-  const pointsInCurrentLevel = currentPoints % 1000;
-  const xpProgress = (pointsInCurrentLevel / pointsForNextLevel) * 100;
-  
-  const isUserPremium = isPremiumUser();
-
-  // --- STYLES DYNAMIQUES ---
-  const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg },
-    safeArea: { flex: 1, paddingTop: Platform.OS === 'android' ? 30 : 0 },
-    auroraBg: { ...StyleSheet.absoluteFillObject, zIndex: -1, overflow: 'hidden' },
-    blob: { position: 'absolute', width: 300, height: 300, borderRadius: 150, opacity: 0.4 },
-    scrollContent: { padding: 20 },
-    
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 30 },
-    greeting: { color: theme.colors.textSecondary, fontSize: 10, fontWeight: '600', letterSpacing: 1, marginBottom: 2 },
-    username: { color: theme.colors.text, fontSize: 22, fontWeight: '900', letterSpacing: 0.5 },
-    statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
-    statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
-    statusText: { color: theme.colors.success, fontSize: 10, fontWeight: '600' },
-    avatarBtn: { shadowColor: theme.colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
-    avatarGradient: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
-    avatarText: { color: '#fff', fontWeight: '900', fontSize: 16 },
-    
-    xpWrapper: { marginBottom: 25 },
-    xpInfo: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-    levelText: { color: theme.colors.text, fontWeight: '600', fontSize: 12 },
-    xpText: { color: theme.colors.textSecondary, fontSize: 10 },
-    xpTrack: { height: 4, backgroundColor: theme.colors.border, borderRadius: 2, overflow: 'hidden' },
-    xpFill: { height: '100%', borderRadius: 2 },
-    
-    grid: { flexDirection: 'row', gap: 15, marginBottom: 30 },
-    glassCard: { flex: 1, backgroundColor: theme.colors.glass, borderRadius: 20, padding: 15, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', shadowColor: theme.isDark ? 'transparent' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: theme.isDark ? 0 : 0.05, shadowRadius: 8, elevation: theme.isDark ? 0 : 2 },
-    cardIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.isDark ? 'rgba(255,255,255,0.05)' : theme.colors.bg, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-    cardValue: { color: theme.colors.text, fontSize: 24, fontWeight: '900' },
-    cardLabel: { color: theme.colors.textSecondary, fontSize: 9, fontWeight: '600', marginTop: 5, letterSpacing: 1, textAlign: 'center' },
-    
-    sectionTitle: { color: theme.colors.textSecondary, fontSize: 10, fontWeight: '600', letterSpacing: 2, marginBottom: 15, marginLeft: 5 },
-    
-    aetherSystemCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.glass, borderRadius: 20, padding: 15, marginBottom: 15, borderWidth: 1, borderColor: theme.colors.border, shadowColor: theme.isDark ? 'transparent' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: theme.isDark ? 0 : 0.05, shadowRadius: 8, elevation: theme.isDark ? 0 : 2 },
-    systemIconBox: { width: 44, height: 44, borderRadius: 14, backgroundColor: theme.isDark ? 'rgba(255,255,255,0.05)' : theme.colors.bg, justifyContent: 'center', alignItems: 'center' },
-    textContainer: { flex: 1, paddingHorizontal: 15 },
-    labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
-    systemLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 1, color: theme.colors.textSecondary, flex: 1, marginRight: 10 },
-    systemValue: { fontSize: 12, fontWeight: '600', flexShrink: 0 },
-    barBackground: { height: 6, backgroundColor: theme.colors.border, borderRadius: 3, overflow: 'hidden', marginTop: 5 },
-    barFill: { height: '100%', borderRadius: 3 },
-    
-    quickActionsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 25 },
-    quickActionBtn: { width: (width - 40 - 15) / 2, backgroundColor: theme.colors.glass, borderRadius: 20, padding: 15, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', marginBottom: 15, shadowColor: theme.isDark ? 'transparent' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: theme.isDark ? 0 : 0.05, shadowRadius: 8, elevation: theme.isDark ? 0 : 2 },
-    quickActionIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-    quickActionText: { color: theme.colors.textSecondary, fontSize: 10, fontWeight: '600', letterSpacing: 1, textAlign: 'center' },
-    
-    lockOverlay: { position: 'absolute', top: -5, right: -5, backgroundColor: theme.colors.cardBg, borderRadius: 10, padding: 2 },
-  });
-
-  const AetherProgress = React.memo(({ progress, color, label, icon, value }: any) => (
-    <View style={styles.aetherSystemCard}>
-      <View style={styles.systemIconBox}>
-          <MaterialCommunityIcons name={icon} size={24} color={color} />
-      </View>
-      <View style={styles.textContainer}>
-          <View style={styles.labelRow}>
-              <Text style={styles.systemLabel} numberOfLines={1} ellipsizeMode="tail">{label}</Text>
-              <Text style={[styles.systemValue, { color }]}>{value}</Text>
-          </View>
-          <View style={styles.barBackground}>
-              <LinearGradient
-                  colors={[color, theme.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)']}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={[styles.barFill, { width: `${Math.min(progress, 100)}%` }]}
-              />
-          </View>
-      </View>
-      <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.textSecondary} />
-    </View>
-  ));
+  const onRefresh = () => { setRefreshing(true); loadDashboardData(); };
+  const currentStyles = styles(theme);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
-      {theme.isDark && (
-        <View style={styles.auroraBg}>
-            <View style={[styles.blob, { top: -100, right: -50, backgroundColor: 'rgba(0, 243, 255, 0.15)' }]} />
-            <View style={[styles.blob, { top: 200, left: -100, backgroundColor: 'rgba(139, 92, 246, 0.15)' }]} />
-        </View>
-      )}
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />} showsVerticalScrollIndicator={false}>
+    <View style={currentStyles.container}>
+      <StatusBar style={theme.isDark ? "light" : "dark"} />
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView 
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }} // Ajout de padding en bas pour le scroll
+        >
+          <View style={currentStyles.header}>
+            <View>
+              <Text style={currentStyles.greeting}>BONJOUR</Text>
+              <Text style={currentStyles.username}>{userName}</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/profile')} style={currentStyles.profileBtn}>
+              <Ionicons name="person" size={18} color={theme.colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={currentStyles.statsRow}>
+             <ProgressWidget label="NUTRITION" value={nutritionStats.consumed} target={nutritionStats.target} unit="Kcal" icon="fire" color={theme.colors.success} theme={theme} />
+             <View style={{width: 10}} />
+             <ProgressWidget label="ENTRAÎNEMENT" value={workoutStats.done} target={workoutStats.target} unit="S." icon="dumbbell" color={theme.colors.primary} theme={theme} />
+          </View>
+
+          <Text style={currentStyles.sectionTitle}>EN COURS</Text>
           
-          <View style={styles.header}>
-              <View>
-                  <Text style={styles.greeting}>CONNEXION ÉTABLIE</Text>
-                  <Text style={styles.username}>{profile?.full_name || 'INITIÉ NEXUS'}</Text>
-                  <View style={styles.statusRow}>
-                      <View style={[styles.statusDot, { backgroundColor: theme.colors.success }]} />
-                      <Text style={styles.statusText}>SYSTÈMES EN LIGNE</Text>
-                  </View>
-              </View>
-              <TouchableOpacity style={styles.avatarBtn} onPress={() => router.push('/profile' as any)}>
-                  <LinearGradient colors={[theme.colors.primary, theme.colors.secondary]} style={styles.avatarGradient}>
-                      <Text style={styles.avatarText}>{profile?.full_name ? profile.full_name.substring(0, 2).toUpperCase() : 'NX'}</Text>
-                  </LinearGradient>
-              </TouchableOpacity>
-          </View>
-
-          <View style={styles.xpWrapper}>
-              <View style={styles.xpInfo}>
-                  <Text style={styles.levelText}>NIVEAU {currentLevel}</Text>
-                  <Text style={styles.xpText}>{pointsInCurrentLevel} / {pointsForNextLevel} XP</Text>
-              </View>
-              <View style={styles.xpTrack}>
-                  <LinearGradient colors={[theme.colors.primary, theme.colors.accent]} start={{x:0, y:0}} end={{x:1, y:0}} style={[styles.xpFill, {width: `${xpProgress}%`}]} />
-              </View>
-          </View>
-
-          <View style={styles.grid}>
-              <View style={styles.glassCard}>
-                  <View style={styles.cardIcon}>
-                      <MaterialCommunityIcons name="fire" size={24} color={theme.colors.warning} />
-                  </View>
-                  <Text style={styles.cardValue}>{profile?.streak || 0}</Text>
-                  <Text style={styles.cardLabel}>SÉRIE JOURS</Text>
-              </View>
-              <View style={styles.glassCard}>
-                  <View style={styles.cardIcon}>
-                      <MaterialCommunityIcons name="scale-bathroom" size={24} color={theme.colors.primary} />
-                  </View>
-                  <Text style={styles.cardValue}>
-                    {profile?.weight || '--'} <Text style={{fontSize:12, color: theme.colors.textSecondary}}>KG</Text>
-                  </Text>
-                  <Text style={styles.cardLabel}>MASSE ACTUELLE</Text>
-              </View>
-          </View>
-
-          <Text style={styles.sectionTitle}>MONITORING</Text>
-          
-          <TouchableOpacity onPress={() => handleNav('/(tabs)/workout')} activeOpacity={0.8}>
-              <AetherProgress
-                  progress={stats.workoutProgress}
-                  color={theme.colors.primary}
-                  label={stats.workoutName.toUpperCase()} 
-                  value={stats.nextWorkout}
-                  icon="dumbbell"
-              />
+          {/* CARTE PRINCIPALE AVEC SCROLL INTERNE SI TEXTE TROP LONG */}
+          <TouchableOpacity 
+            style={currentStyles.mainCard} 
+            activeOpacity={0.9}
+            onPress={() => router.push('/features/workout-tracker')}
+          >
+            <LinearGradient
+              colors={activeWorkout ? [theme.colors.primary, theme.colors.secondary] : [theme.colors.glass, theme.colors.glass]}
+              start={{x: 0, y: 0}} end={{x: 1, y: 0.5}}
+              style={currentStyles.mainCardGradient}
+            >
+                {activeWorkout ? (
+                    <>
+                        <View style={currentStyles.mainCardContent}>
+                            <View style={currentStyles.activeBadge}>
+                                <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFD700" />
+                                <Text style={currentStyles.badgeText}>PLAN ACTIF</Text>
+                            </View>
+                            <Text style={currentStyles.mainCardTitle}>{activeWorkout.title}</Text>
+                            <Text style={currentStyles.mainCardSub}>
+                                Focus {activeWorkout.days[0].focus} • {activeWorkout.days.length} séances
+                            </Text>
+                        </View>
+                        <View style={currentStyles.arrowBtn}>
+                            <Ionicons name="arrow-forward" size={20} color="#fff" />
+                        </View>
+                    </>
+                ) : (
+                    <>
+                         <View style={currentStyles.mainCardContent}>
+                            <Text style={[currentStyles.mainCardTitle, {color: theme.colors.text}]}>Aucun programme</Text>
+                            <Text style={[currentStyles.mainCardSub, {color: theme.colors.textSecondary}]}>Créez votre plan personnalisé avec l'IA.</Text>
+                        </View>
+                        <View style={[currentStyles.arrowBtn, {backgroundColor: theme.colors.primary}]}>
+                            <Ionicons name="add" size={20} color="#fff" />
+                        </View>
+                    </>
+                )}
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => handleNav('/(tabs)/nutrition')} activeOpacity={0.8}>
-              <AetherProgress
-                  progress={stats.nutritionProgress}
-                  color={theme.colors.accent}
-                  label="NUTRITION"
-                  value={`${stats.calories} / ${stats.caloriesTarget} kcal`}
-                  icon="food-apple"
-              />
-          </TouchableOpacity>
+          <Text style={currentStyles.sectionTitle}>EXPLORER</Text>
+          <View style={currentStyles.grid}>
+            <TouchableOpacity style={currentStyles.gridItem} onPress={() => router.push('/features/nutrition-plan')}>
+                <View style={currentStyles.gridHeader}>
+                    <View style={[currentStyles.gridIconBox, { backgroundColor: theme.colors.success + '15' }]}>
+                        <MaterialCommunityIcons name="food-apple" size={18} color={theme.colors.success} />
+                    </View>
+                    <Ionicons name="arrow-forward" size={16} color={theme.colors.border} />
+                </View>
+                <View>
+                    <Text style={currentStyles.gridTitle}>Nutrition</Text>
+                    <Text style={currentStyles.gridSub}>{activeMealPlan ? "Plan actif" : "Générer"}</Text>
+                </View>
+            </TouchableOpacity>
 
-          <Text style={styles.sectionTitle}>ACTIONS RAPIDES</Text>
-          <View style={styles.quickActionsGrid}>
-              
-              {/* BOUTON MASSE GRASSE - PREMIUM ONLY */}
-              <TouchableOpacity 
-                style={[styles.quickActionBtn, !isUserPremium && {opacity: 0.8}]} 
-                onPress={() => handleLockedNav('/features/body_fat')}
-              >
-                  <View style={[styles.quickActionIcon, { backgroundColor: theme.isDark ? 'rgba(255, 170, 0, 0.2)' : '#FFF8E1' }]}>
-                      <MaterialCommunityIcons name="water-percent" size={24} color={theme.colors.warning} />
-                  </View>
-                  <Text style={styles.quickActionText}>MASSE GRASSE</Text>
-                  
-                  {/* Cadenas si gratuit */}
-                  {!isUserPremium && (
-                      <View style={styles.lockOverlay}>
-                          <MaterialCommunityIcons name="lock" size={12} color={theme.colors.textSecondary} />
-                      </View>
-                  )}
-              </TouchableOpacity>
+            <TouchableOpacity style={currentStyles.gridItem} onPress={() => router.push('/features/exercise-library')}>
+                <View style={currentStyles.gridHeader}>
+                    <View style={[currentStyles.gridIconBox, { backgroundColor: '#f59e0b15' }]}>
+                        <MaterialCommunityIcons name="bookshelf" size={18} color="#f59e0b" />
+                    </View>
+                    <Ionicons name="arrow-forward" size={16} color={theme.colors.border} />
+                </View>
+                <View>
+                    <Text style={currentStyles.gridTitle}>Bibliothèque</Text>
+                    <Text style={currentStyles.gridSub}>+200 mouvements</Text>
+                </View>
+            </TouchableOpacity>
 
-              <TouchableOpacity style={styles.quickActionBtn} onPress={() => handleNav('/features/exercise-library')}>
-                  <View style={[styles.quickActionIcon, { backgroundColor: theme.isDark ? 'rgba(255, 50, 50, 0.2)' : '#FFEBEE' }]}>
-                      <MaterialCommunityIcons name="dumbbell" size={24} color={theme.colors.danger} />
-                  </View>
-                  <Text style={styles.quickActionText}>BIBLIOTHÈQUE</Text>
-              </TouchableOpacity>
+            <TouchableOpacity style={currentStyles.gridItem} onPress={() => router.push('/features/workout_log')}>
+                <View style={currentStyles.gridHeader}>
+                    <View style={[currentStyles.gridIconBox, { backgroundColor: '#8b5cf615' }]}>
+                        <MaterialCommunityIcons name="history" size={18} color="#8b5cf6" />
+                    </View>
+                    <Ionicons name="arrow-forward" size={16} color={theme.colors.border} />
+                </View>
+                <View>
+                    <Text style={currentStyles.gridTitle}>Historique</Text>
+                    <Text style={currentStyles.gridSub}>Vos progrès</Text>
+                </View>
+            </TouchableOpacity>
 
-              <TouchableOpacity style={styles.quickActionBtn} onPress={() => handleNav('/features/food-journal')}>
-                  <View style={[styles.quickActionIcon, { backgroundColor: theme.isDark ? 'rgba(74, 222, 128, 0.2)' : '#E8F5E9' }]}>
-                      <MaterialCommunityIcons name="notebook-edit" size={24} color={theme.colors.success} />
-                  </View>
-                  <Text style={styles.quickActionText}>JOURNAL</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.quickActionBtn} onPress={() => handleNav('/(tabs)/systems')}>
-                  <View style={[styles.quickActionIcon, { backgroundColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : theme.colors.bg }]}>
-                      <MaterialCommunityIcons name="grid" size={24} color={theme.colors.text} />
-                  </View>
-                  <Text style={styles.quickActionText}>TOUT VOIR</Text>
-              </TouchableOpacity>
+            <TouchableOpacity style={currentStyles.gridItem} onPress={() => router.push('/(tabs)/coach')}>
+                <View style={currentStyles.gridHeader}>
+                    <View style={[currentStyles.gridIconBox, { backgroundColor: theme.colors.primary + '15' }]}>
+                        <MaterialCommunityIcons name="robot" size={18} color={theme.colors.primary} />
+                    </View>
+                    <Ionicons name="arrow-forward" size={16} color={theme.colors.border} />
+                </View>
+                <View>
+                    <Text style={currentStyles.gridTitle}>Neural Coach</Text>
+                    <Text style={currentStyles.gridSub}>Discussion IA</Text>
+                </View>
+            </TouchableOpacity>
           </View>
-          <View style={{ height: 100 }} />
-       </ScrollView>
-     </SafeAreaView>
-   </View>
- );
+        </ScrollView>
+      </SafeAreaView>
+    </View>
+  );
 }
+
+const styles = (theme: any) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.bg },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 15, paddingBottom: 20 },
+    greeting: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
+    username: { fontSize: 20, fontWeight: '300', color: theme.colors.text, marginTop: 2 },
+    profileBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
+    sectionTitle: { fontSize: 11, fontWeight: '900', color: theme.colors.textSecondary, marginHorizontal: 20, marginBottom: 12, marginTop: 25, letterSpacing: 2 },
+    
+    statsRow: { flexDirection: 'row', paddingHorizontal: 20 },
+    widgetCard: { flex: 1, backgroundColor: theme.colors.glass, borderRadius: 20, padding: 16, borderWidth: 1 },
+    widgetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    iconBox: { width: 30, height: 30, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    widgetLabel: { fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5 },
+    widgetValue: { fontSize: 22, fontWeight: '900' },
+    widgetTarget: { fontSize: 11, fontWeight: '600' },
+    progressBg: { height: 4, backgroundColor: theme.colors.border, borderRadius: 2, overflow: 'hidden', marginTop: 8 },
+    progressFill: { height: '100%', borderRadius: 2 },
+
+    // Carte Principale : Flexible en hauteur
+    mainCard: { marginHorizontal: 20, borderRadius: 20, overflow: 'hidden', minHeight: CARD_MIN_HEIGHT, marginBottom: 10 },
+    mainCardGradient: { flex: 1, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    mainCardContent: { flex: 1, paddingRight: 10 }, // Espace pour ne pas toucher la flèche
+    activeBadge: { flexDirection:'row', alignItems:'center', gap:4, marginBottom:6, backgroundColor:'rgba(0,0,0,0.2)', alignSelf:'flex-start', paddingHorizontal:8, paddingVertical:4, borderRadius:8 },
+    badgeText: { color:'#FFD700', fontWeight:'900', fontSize:8 },
+    mainCardTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', lineHeight: 24 }, // Line height pour l'espacement
+    mainCardSub: { color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 4 },
+    arrowBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+
+    grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 10 },
+    gridItem: { width: (width - 50) / 2, height: 110, backgroundColor: theme.colors.glass, borderRadius: 16, padding: 15, justifyContent: 'space-between', borderWidth: 1, borderColor: theme.colors.border },
+    gridHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    gridIconBox: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    gridTitle: { color: theme.colors.text, fontSize: 13, fontWeight: 'bold' },
+    gridSub: { color: theme.colors.textSecondary, fontSize: 10, marginTop: 2, letterSpacing: 0.5 },
+});

@@ -10,6 +10,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../lib/theme';
 
+// --- AJOUT : Import du Hook de sauvegarde ---
+import { useWorkoutLogger } from '../hooks/useWorkoutLogger';
+
 const { width } = Dimensions.get('window');
 
 // --- TYPES ---
@@ -34,6 +37,10 @@ type WorkoutPlan = {
 
 export default function WorkoutTrackerScreen() {
   const theme = useTheme();
+  
+  // --- AJOUT : Initialisation du Hook ---
+  const { saveWorkout, isSaving } = useWorkoutLogger();
+
   const [loading, setLoading] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [activePlan, setActivePlan] = useState<WorkoutPlan | null>(null);
@@ -128,11 +135,74 @@ export default function WorkoutTrackerScreen() {
     }
   };
 
+  // --- AJOUT : Fonction pour sauvegarder la séance dans l'historique ---
+  const handleFinishSession = async () => {
+    if (!activePlan) return;
+    
+    // Vérification basique
+    const hasActivity = Object.values(completedExercises).some(v => v === true);
+    if (!hasActivity) {
+        Alert.alert("Séance vide", "Cochez au moins un exercice avant de terminer.");
+        return;
+    }
+
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // 1. Préparation des données
+    // On prend le jour actif (onglet sélectionné)
+    const currentDay = activePlan.days[activeTab];
+    const sessionName = currentDay.focus ? `${activePlan.title} - ${currentDay.focus}` : activePlan.title;
+
+    const sessionData = {
+        name: sessionName,
+        duration: 3600, // TODO: Connecter à un vrai timer
+        notes: sessionNote,
+        sets: [] as any[]
+    };
+
+    // 2. Récupération des exercices cochés pour CE jour
+    currentDay.exercises.forEach((ex, index) => {
+        const key = `day_${activeTab}_ex_${index}`;
+        
+        if (completedExercises[key]) {
+            // Parsing sécurisé des sets/reps (au cas où ce soit des strings "3-4")
+            const setsCount = parseInt(String(ex.sets)) || 3;
+            const repsCount = parseInt(String(ex.reps)) || 10;
+            
+            // On ajoute une entrée pour chaque série
+            for(let i=0; i < setsCount; i++) {
+                sessionData.sets.push({
+                    exerciseName: ex.name,
+                    reps: repsCount,
+                    weight: 0, // TODO: Demander le poids réel
+                    rpe: 8     // Difficulté moyenne par défaut
+                });
+            }
+        }
+    });
+
+    // 3. Appel au Hook de sauvegarde
+    const result = await saveWorkout(sessionData);
+
+    if (result.success) {
+        Alert.alert(
+            "Séance Enregistrée ! 🚀", 
+            "Bravo, votre historique a été mis à jour.",
+            [
+                { text: "Voir l'historique", onPress: () => router.push('/features/workout_log') },
+                { text: "OK", style: 'cancel' }
+            ]
+        );
+    } else {
+        Alert.alert("Erreur", "Impossible de sauvegarder la séance : " + result.error);
+    }
+  };
+
   const toggleExercise = async (dayIndex: number, exIndex: number) => {
     if (Platform.OS !== 'web') Haptics.selectionAsync();
     
     const key = `day_${dayIndex}_ex_${exIndex}`;
-    const isChecking = !completedExercises[key]; // Vrai si on est en train de cocher
+    const isChecking = !completedExercises[key]; 
     const newStatus = { ...completedExercises, [key]: isChecking };
     
     setCompletedExercises(newStatus);
@@ -141,7 +211,6 @@ export default function WorkoutTrackerScreen() {
     if (session) {
         const dateStr = new Date().toISOString().split('T')[0];
         
-        // 1. Sauvegarde du statut (Coché/Décoché)
         await supabase.from('workout_logs').upsert({
             user_id: session.user.id,
             log_date: dateStr,
@@ -149,19 +218,12 @@ export default function WorkoutTrackerScreen() {
             session_note: sessionNote
         }, { onConflict: 'user_id, log_date' });
 
-        // 2. GESTION INTELLIGENTE (XP + STREAK)
-        // On déclenche la fonction serveur seulement si on coche
         if (isChecking) {
             const { error } = await supabase.rpc('handle_new_activity', { 
                 user_id: session.user.id, 
                 xp_reward: 10 
             });
-            
-            if (error) console.log("Erreur Gamification:", error);
-            else {
-               // Feedback optionnel pour le test
-               console.log("Activité enregistrée (XP + Streak mis à jour)");
-            }
+            if (error) console.log("Erreur Gamification (non bloquant):", error);
         }
     }
   };
@@ -285,7 +347,6 @@ export default function WorkoutTrackerScreen() {
     regenBtn: { padding: 15, alignItems: 'center', marginTop: 20, marginBottom: 10 },
     regenText: { color: theme.colors.textSecondary, fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
 
-    // Style pour le bouton démo
     demoBtn: {
         flexDirection: 'row', alignItems: 'center',
         marginTop: 8, paddingVertical: 4, paddingHorizontal: 8,
@@ -294,6 +355,29 @@ export default function WorkoutTrackerScreen() {
     },
     demoText: {
         color: '#ef4444', fontSize: 10, fontWeight: 'bold', marginLeft: 4
+    },
+    
+    // --- AJOUT : Style du bouton de fin ---
+    finishBtn: {
+        backgroundColor: theme.colors.success, 
+        padding: 16, 
+        borderRadius: 16, 
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 20,
+        marginBottom: 30,
+        shadowColor: theme.colors.success,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4
+    },
+    finishBtnText: {
+        color: '#fff', 
+        fontWeight: '900', 
+        fontSize: 14,
+        letterSpacing: 1,
+        textTransform: 'uppercase'
     }
   });
 
@@ -397,7 +481,6 @@ export default function WorkoutTrackerScreen() {
                             </View>
                             {ex.notes && <Text style={styles.exNote}>{ex.notes}</Text>}
 
-                            {/* BOUTON DÉMO VIDÉO */}
                             <TouchableOpacity 
                                 style={styles.demoBtn} 
                                 onPress={() => openVideoDemo(ex.name)}
@@ -415,6 +498,19 @@ export default function WorkoutTrackerScreen() {
                 );
             })}
         </View>
+
+        {/* --- AJOUT : Bouton Terminer la séance --- */}
+        <TouchableOpacity 
+            style={styles.finishBtn}
+            onPress={handleFinishSession}
+            disabled={isSaving}
+        >
+            {isSaving ? <ActivityIndicator color="#fff"/> : (
+                <Text style={styles.finishBtnText}>
+                    TERMINER LA SÉANCE
+                </Text>
+            )}
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.regenBtn} onPress={handleGenerate}>
             <Text style={styles.regenText}>GÉNÉRER UN NOUVEAU PROGRAMME</Text>

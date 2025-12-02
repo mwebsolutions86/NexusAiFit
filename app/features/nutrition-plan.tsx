@@ -12,7 +12,7 @@ import { useTheme } from '../../lib/theme';
 
 const { width } = Dimensions.get('window');
 
-export default function NutritionScreen() {
+export default function NutritionPlanScreen() {
   const theme = useTheme();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -20,13 +20,20 @@ export default function NutritionScreen() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [preferences, setPreferences] = useState('');
   
+  // --- LOGIQUE JOUR J ---
+  // (new Date().getDay() renvoie 0 pour Dimanche, 1 pour Lundi...)
+  // On veut 0 pour Lundi, donc on décale : (Jour + 6) % 7
   const getTodayIndex = () => (new Date().getDay() + 6) % 7;
   const [activeTab, setActiveTab] = useState(getTodayIndex());
   
   const [consumedMeals, setConsumedMeals] = useState<{[key: string]: boolean}>({});
   const [dailyStats, setDailyStats] = useState({ calories: 0, protein: 0 });
 
-  useEffect(() => { setActiveTab(getTodayIndex()); }, []);
+  // Force l'onglet sur le jour actuel au montage
+  useEffect(() => {
+    setActiveTab(getTodayIndex());
+  }, []);
+
   useFocusEffect(useCallback(() => { fetchData(); }, []));
 
   const fetchData = async () => {
@@ -37,7 +44,14 @@ export default function NutritionScreen() {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
       setUserProfile(profile);
 
-      const { data: plan } = await supabase.from('meal_plans').select('content').eq('user_id', session.user.id).eq('is_active', true).order('created_at', { ascending: false }).limit(1).single();
+      const { data: plan } = await supabase
+        .from('meal_plans')
+        .select('content')
+        .eq('user_id', session.user.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
       if (plan?.content) {
         setActivePlan(plan.content);
@@ -48,11 +62,19 @@ export default function NutritionScreen() {
 
   const loadDailyLog = async (userId: string) => {
       const today = new Date().toISOString().split('T')[0];
-      const { data } = await supabase.from('nutrition_logs').select('meals_status, total_calories, total_protein').eq('user_id', userId).eq('log_date', today).maybeSingle();
+      const { data } = await supabase
+        .from('nutrition_logs')
+        .select('meals_status, total_calories, total_protein')
+        .eq('user_id', userId)
+        .eq('log_date', today)
+        .maybeSingle();
 
       if (data) {
           setConsumedMeals(data.meals_status || {});
-          setDailyStats({ calories: data.total_calories || 0, protein: data.total_protein || 0 });
+          setDailyStats({ 
+              calories: data.total_calories || 0, 
+              protein: data.total_protein || 0 
+          });
       } else {
           setConsumedMeals({});
           setDailyStats({ calories: 0, protein: 0 });
@@ -68,15 +90,20 @@ export default function NutritionScreen() {
 
   const toggleMeal = async (dayIndex: number, mealIndex: number, calories: number, proteinRaw: string | number) => {
     const todayIdx = getTodayIndex();
+    
     if (dayIndex !== todayIdx) {
         if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert("Hors Zone", "Concentrez-vous sur le plan d'aujourd'hui.");
+        Alert.alert("Hors Zone", dayIndex > todayIdx 
+            ? "Vous ne pouvez pas manger dans le futur ! Revenez demain." 
+            : "Ce jour est passé. Concentrez-vous sur aujourd'hui.");
         return;
     }
+
     if (Platform.OS !== 'web') Haptics.selectionAsync();
 
     const key = `day_${dayIndex}_meal_${mealIndex}`;
     const isChecking = !consumedMeals[key];
+    
     let proteinVal = 0;
     if (typeof proteinRaw === 'number') proteinVal = proteinRaw;
     else if (typeof proteinRaw === 'string') proteinVal = parseInt(proteinRaw.replace(/\D/g,'')) || 0;
@@ -86,7 +113,10 @@ export default function NutritionScreen() {
     const newProtein = isChecking ? dailyStats.protein + proteinVal : dailyStats.protein - proteinVal;
 
     setConsumedMeals(newStatus);
-    setDailyStats({ calories: Math.max(0, newCalories), protein: Math.max(0, newProtein) });
+    setDailyStats({ 
+        calories: Math.max(0, newCalories), 
+        protein: Math.max(0, newProtein) 
+    });
 
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
@@ -104,32 +134,42 @@ export default function NutritionScreen() {
   const handleGenerate = async () => {
     setLoading(true);
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
     try {
         const context = preferences.trim() || `Objectif: ${userProfile?.goal || 'Santé'}`;
         const mealJson = await generateMealPlanJSON(userProfile, context);
+
         if (mealJson && mealJson.days) {
             const { data: { session } } = await supabase.auth.getSession();
             await supabase.from('meal_plans').update({ is_active: false }).eq('user_id', session!.user.id);
-            const { error } = await supabase.from('meal_plans').insert({ user_id: session!.user.id, content: mealJson, title: mealJson.title || "Plan Nutrition IA", is_active: true });
+            
+            const { error } = await supabase.from('meal_plans').insert({
+                user_id: session!.user.id,
+                content: mealJson,
+                title: mealJson.title || "Plan Nutrition IA",
+                is_active: true
+            });
+
             if (!error) {
                 setActivePlan(mealJson);
                 setConsumedMeals({});
                 setDailyStats({ calories: 0, protein: 0 });
                 setPreferences('');
-                Alert.alert("Plan Prêt", "Nouveau menu généré.");
+                Alert.alert("Nouveau Menu Prêt", "Votre plan a été généré et calibré.");
             }
         }
-    } catch (e: any) { Alert.alert("Erreur", "Impossible de générer le plan."); } finally { setLoading(false); }
+    } catch (e: any) {
+        Alert.alert("Erreur", "Impossible de générer le plan.");
+    } finally {
+        setLoading(false);
+    }
   };
 
-  // --- LA FONCTION MANQUANTE ---
   const renderGenerator = () => (
     <View style={styles.inputCard}>
         <MaterialCommunityIcons name="food-apple" size={48} color={theme.colors.success} style={{marginBottom: 15}} />
         <Text style={styles.inputTitle}>DIÉTÉTICIEN IA</Text>
-        <Text style={styles.inputDesc}>
-            Générez une semaine de repas complète, adaptée à votre métabolisme et vos goûts.
-        </Text>
+        <Text style={styles.inputDesc}>Générez votre plan de la semaine.</Text>
         <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>PRÉFÉRENCES</Text>
             <TextInput 
@@ -154,6 +194,7 @@ export default function NutritionScreen() {
   const renderPlan = () => {
     const safeIndex = Math.min(activeTab, (activePlan?.days?.length || 1) - 1);
     const day = activePlan.days[safeIndex];
+    
     if (!day) return null;
 
     const dayTarget = calculateDayTarget(safeIndex);
@@ -254,11 +295,9 @@ export default function NutritionScreen() {
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
     safeArea: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
+    header: { flexDirection: 'row', alignItems: 'center', padding: 20 },
     backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
     headerTitle: { color: theme.colors.text, fontWeight: '900', marginLeft: 15, letterSpacing: 1, fontSize: 16 },
-    headerSub: { color: theme.colors.textSecondary, fontSize: 10, fontWeight: 'bold' },
-    iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
     content: { padding: 20 },
     progressBarBg: { height: 8, backgroundColor: theme.colors.border, borderRadius: 4, overflow: 'hidden', marginTop: 10 },
     progressBarFill: { height: '100%', borderRadius: 4 },
@@ -295,18 +334,13 @@ export default function NutritionScreen() {
 
   return (
     <View style={styles.container}>
-      {/* CORRECTION ICI : Utilisation de 'style' au lieu de 'barStyle' pour expo-status-bar */}
-      <StatusBar style={theme.isDark ? "light" : "dark"} translucent={true} backgroundColor="transparent" />
-      
+      <StatusBar style={theme.isDark ? "light" : "dark"} />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-            <View>
-                <Text style={styles.headerTitle}>FUEL</Text>
-                <Text style={styles.headerSub}>Nutrition</Text>
-            </View>
-            <TouchableOpacity style={styles.iconBtn} onPress={() => router.push('/features/shopping')}>
-                <MaterialCommunityIcons name="cart-outline" size={18} color={theme.colors.text} />
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
             </TouchableOpacity>
+            <Text style={styles.headerTitle}>NUTRITION PLANNER</Text>
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             {activePlan ? renderPlan() : renderGenerator()}

@@ -1,624 +1,306 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../lib/theme';
 
+// Types complets correspondants à la base de données
 interface EditData {
   full_name: string;
   age: string;
   weight: string;
   height: string;
+  gender: 'male' | 'female' | '';
   goal: string;
   activity_level: string;
+  experience_level: string;
+  equipment: string;
+  training_days: string;
 }
 
-interface SubscriptionData {
-  currentPlan: string;
-  autoRenewal: boolean;
-  nextRenewal: string;
-  paymentHistory: Array<{
-    date: string;
-    amount: string;
-    status: string;
-  }>;
-}
-
-interface PrivacySettings {
-  dataSharing: boolean;
-  profileVisibility: 'public' | 'private' | 'friends';
-  emailNotifications: boolean;
-  pushNotifications: boolean;
-  workoutReminders: boolean;
-  cookieTracking: boolean;
-}
-
-interface AccountSettings {
-  suspensionDays: number;
-  isDeactivated: boolean;
-}
-
-export default function Profile() {
+export default function ProfileScreen() {
    const router = useRouter();
    const theme = useTheme();
    const [profile, setProfile] = useState<any>(null);
    const [editing, setEditing] = useState(false);
    const [loading, setLoading] = useState(false);
-   const [profileLoading, setProfileLoading] = useState(false);
-   
    const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
+  // État local pour l'édition
   const [editData, setEditData] = useState<EditData>({
-    full_name: '',
-    age: '',
-    weight: '',
-    height: '',
-    goal: '',
-    activity_level: '',
+    full_name: '', age: '', weight: '', height: '', gender: '',
+    goal: '', activity_level: '', experience_level: '', equipment: '', training_days: ''
   });
 
-  const [subscriptionData, setSubscriptionData] = useState<SubscriptionData>({
-    currentPlan: 'FREE',
-    autoRenewal: true,
-    nextRenewal: '2025-12-15',
-    paymentHistory: [
-      { date: '2024-11-15', amount: '5.99€', status: 'Réussi' },
-    ]
-  });
-
-  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>({
-    dataSharing: true,
-    profileVisibility: 'public',
-    emailNotifications: true,
-    pushNotifications: true,
-    workoutReminders: true,
-    cookieTracking: false,
-  });
-
-  const [accountSettings, setAccountSettings] = useState<AccountSettings>({
-    suspensionDays: 0,
-    isDeactivated: false,
-  });
-
-  const toggleAutoRenewal = () => {
-    setSubscriptionData(prev => ({ ...prev, autoRenewal: !prev.autoRenewal }));
-  };
-
-  const togglePrivacySetting = (key: keyof typeof privacySettings) => {
-    if (Platform.OS !== 'web') Haptics.selectionAsync();
-    setPrivacySettings(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const updateTier = async (newTier: string) => {
-    try {
-      setShowSubscriptionModal(false);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({ tier: newTier })
-        .eq('id', session.user.id);
-
-      if (error) throw error;
-
-      setSubscriptionData(prev => ({ ...prev, currentPlan: newTier }));
-      setProfile({ ...profile, tier: newTier });
-      
-      if (newTier === 'PREMIUM') {
-          Alert.alert("Bienvenue au Club", "L'accès Premium est débloqué !");
-          if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-          Alert.alert("Abonnement", "Vous êtes passé au plan Gratuit.");
-      }
-      
-    } catch (e) {
-      Alert.alert("Erreur", "Impossible de changer le plan.");
-    }
-  };
-
-  const handleAccountAction = (action: string) => {
-    switch (action) {
-      case 'changePlan':
-        setShowSubscriptionModal(true);
-        break;
-      case 'suspend':
-        Alert.alert('Suspension', 'Votre compte sera suspendu pour 7 jours.', [
-          { text: 'Annuler', style: 'cancel' },
-          { text: 'Confirmer', onPress: () => setAccountSettings(prev => ({ ...prev, suspensionDays: 7 })) }
-        ]);
-        break;
-      case 'delete':
-        Alert.alert('Suppression définitive', 'ATTENTION : Cette action est irréversible !', [
-          { text: 'Annuler', style: 'cancel' },
-          {
-            text: 'SUPPRIMER',
-            style: 'destructive',
-            onPress: () => Alert.alert('Confirmation requise', 'Tapez "SUPPRIMER" pour confirmer', [
-              { text: 'Annuler', style: 'cancel' },
-              { text: 'Confirmer', onPress: () => Alert.alert('Supprimé', 'Votre compte a été supprimé.') }
-            ])
-          }
-        ]);
-        break;
-      case 'logout':
-          Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
-              { text: 'Annuler', style: 'cancel' },
-              { 
-                  text: 'Déconnexion', 
-                  style: 'destructive',
-                  onPress: async () => {
-                      await supabase.auth.signOut();
-                      router.replace('/auth/index' as any);
-                  }
-              }
-          ]);
-          break;
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchProfile();
-    }, [])
-  );
+  useFocusEffect(useCallback(() => { fetchProfile(); }, []));
 
   const fetchProfile = async () => {
-    setProfileLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const { data: userProfile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
+      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
 
-      if (error) throw error;
-
-      if (userProfile) {
-        setProfile(userProfile);
+      if (data) {
+        setProfile(data);
         setEditData({
-          full_name: userProfile.full_name || '',
-          age: userProfile.age ? userProfile.age.toString() : '',
-          weight: userProfile.weight ? userProfile.weight.toString() : '',
-          height: userProfile.height ? userProfile.height.toString() : '',
-          goal: userProfile.goal || '',
-          activity_level: userProfile.activity_level || '',
+          full_name: data.full_name || '',
+          age: data.age?.toString() || '',
+          weight: data.weight?.toString() || '',
+          height: data.height?.toString() || '',
+          gender: data.gender || 'male',
+          goal: data.goal || '',
+          activity_level: data.activity_level || '',
+          experience_level: data.experience_level || '',
+          equipment: data.equipment || '',
+          training_days: data.training_days?.toString() || '3'
         });
-        
-        if (userProfile.tier) {
-            setSubscriptionData(prev => ({ 
-                ...prev, 
-                currentPlan: userProfile.tier.toUpperCase() 
-            }));
-        }
       }
-    } catch (error: any) {
-      console.log('Erreur profil', error);
-    } finally {
-      setProfileLoading(false);
-    }
-  };
-
-  const calculateAge = (birthDate: string) => {
-    if (!birthDate) return null;
-    const today = new Date();
-    const birth = new Date(birthDate);
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    return age;
+    } catch (error) { console.log('Erreur profil', error); }
   };
 
   const saveProfile = async () => {
     if (loading) return;
     setLoading(true);
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
+
       const updates = {
         full_name: editData.full_name,
-        age: editData.age ? parseInt(editData.age) : null,
-        weight: editData.weight ? parseFloat(editData.weight) : null,
-        height: editData.height ? parseFloat(editData.height) : null,
+        age: parseInt(editData.age) || null,
+        weight: parseFloat(editData.weight) || null,
+        height: parseFloat(editData.height) || null,
+        gender: editData.gender,
         goal: editData.goal,
         activity_level: editData.activity_level,
+        experience_level: editData.experience_level,
+        equipment: editData.equipment,
+        training_days: parseInt(editData.training_days) || 3,
         updated_at: new Date().toISOString(),
       };
+
       const { error } = await supabase.from('profiles').update(updates).eq('id', session.user.id);
       if (error) throw error;
+      
       setProfile({ ...profile, ...updates });
       setEditing(false);
-      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Succès', 'Profil mis à jour avec succès');
+      Alert.alert("Succès", "Profil mis à jour.");
     } catch (error: any) {
-      Alert.alert('Erreur', 'Impossible de sauvegarder le profil');
+      Alert.alert('Erreur', 'Impossible de sauvegarder.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleNav = (path: string) => {
-    if (Platform.OS !== 'web') Haptics.selectionAsync();
-    router.push(path as any);
+  const updateTier = async (newTier: string) => {
+    setShowSubscriptionModal(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      await supabase.from('profiles').update({ tier: newTier }).eq('id', session.user.id);
+      setProfile({ ...profile, tier: newTier });
+      if (newTier === 'PREMIUM') Alert.alert("Bienvenue", "Accès Elite activé.");
+    } catch (e) { Alert.alert("Erreur", "Mise à jour impossible."); }
   };
 
-  const currentAge = calculateAge(profile?.birth_date);
+  const handleLogout = () => {
+      Alert.alert('Déconnexion', 'Confirmer ?', [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Oui', style: 'destructive', onPress: async () => {
+              await supabase.auth.signOut();
+              router.replace('/auth/index' as any);
+          }}
+      ]);
+  };
 
-  // Gestion des couleurs
-  const isPremium = subscriptionData.currentPlan === 'PREMIUM';
-  const currentPlanColor = isPremium ? '#ffd700' : theme.colors.textSecondary;
-
-  const styles = StyleSheet.create({
-   container: { flex: 1, backgroundColor: theme.colors.bg },
-   safeArea: { flex: 1, paddingTop: Platform.OS === 'android' ? 30 : 0 },
-   auroraBg: { ...StyleSheet.absoluteFillObject, zIndex: -1, overflow: 'hidden' },
-   blob: { position: 'absolute', width: 300, height: 300, borderRadius: 150, opacity: 0.4 },
-   scrollContent: { padding: 20 },
-   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
-   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
-   headerTitle: { color: theme.colors.text, fontSize: 18, fontWeight: '900', letterSpacing: 1 },
-   editBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
-   avatarSection: { alignItems: 'center', marginBottom: 30 },
-   avatar: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
-   avatarText: { color: '#fff', fontWeight: '900', fontSize: 24 },
-   userName: { color: theme.colors.text, fontSize: 24, fontWeight: '900', marginBottom: 5 },
-   userAge: { color: theme.colors.textSecondary, fontSize: 16 },
-   section: { marginBottom: 30 },
-   sectionTitle: { color: theme.colors.textSecondary, fontSize: 10, fontWeight: 'bold', letterSpacing: 2, marginBottom: 15, marginLeft: 5 },
-   inputGroup: { marginBottom: 20 },
-   inputLabel: { color: theme.colors.text, fontSize: 12, fontWeight: 'bold', marginBottom: 8, letterSpacing: 1 },
-   input: { backgroundColor: theme.colors.glass, borderRadius: 15, padding: 15, color: theme.colors.text, fontSize: 16, borderWidth: 1, borderColor: theme.colors.border },
-   inputEditing: { borderColor: theme.colors.primary, backgroundColor: theme.isDark ? 'rgba(0, 243, 255, 0.05)' : '#F0F9FF' },
-   rowInputs: { flexDirection: 'row' },
-   statsGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-   statCard: { flex: 1, backgroundColor: theme.colors.glass, borderRadius: 20, padding: 15, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', marginHorizontal: 5, shadowColor: theme.isDark ? 'transparent' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: theme.isDark ? 0 : 0.05, shadowRadius: 5, elevation: theme.isDark ? 0 : 2 },
-   statValue: { color: theme.colors.text, fontSize: 24, fontWeight: '900', marginTop: 10 },
-   statLabel: { color: theme.colors.textSecondary, fontSize: 10, fontWeight: 'bold', marginTop: 5, letterSpacing: 1 },
-   
-   // --- MODIFICATION ICI : On retire les couleurs statiques ---
-   subscriptionCard: { 
-       backgroundColor: theme.colors.glass, 
-       borderRadius: 20, padding: 20, 
-       borderWidth: 1, 
-       // borderColor: planColor,  <-- RETIRÉ (sera en inline style)
-       marginBottom: 20, 
-       // shadowColor: planColor, <-- RETIRÉ (sera en inline style)
-       shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 3 
-   },
-   
-   subscriptionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-   subscriptionPlan: { color: theme.colors.text, fontSize: 20, fontWeight: '900' },
-   planBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-   planBadgeText: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-   subscriptionDetails: { marginBottom: 15 },
-   subscriptionText: { color: theme.colors.textSecondary, fontSize: 14, marginBottom: 10 },
-   toggleBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
-   toggleText: { color: theme.colors.text, fontSize: 14, fontWeight: '600' },
-   toggleSwitch: { width: 50, height: 28, borderRadius: 14, backgroundColor: theme.colors.border, justifyContent: 'center', paddingHorizontal: 2 },
-   toggleActive: { backgroundColor: theme.colors.primary },
-   toggleCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff', transform: [{ translateX: 0 }] },
-   toggleCircleActive: { transform: [{ translateX: 22 }] },
-   subscriptionActions: { paddingTop: 10 },
-   upgradeBtn: { backgroundColor: theme.colors.success, borderRadius: 15, padding: 15, alignItems: 'center' },
-   upgradeBtnText: { color: '#fff', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
-   historyTitle: { color: theme.colors.textSecondary, fontSize: 14, fontWeight: 'bold', marginBottom: 10, letterSpacing: 1 },
-   paymentItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.colors.glass, borderRadius: 15, padding: 15, marginBottom: 8, borderWidth: 1, borderColor: theme.colors.border },
-   paymentInfo: { flex: 1 },
-   paymentDate: { color: theme.colors.text, fontSize: 14, fontWeight: '600' },
-   paymentAmount: { color: theme.colors.textSecondary, fontSize: 12, marginTop: 2 },
-   paymentStatus: { color: theme.colors.success, fontSize: 12, fontWeight: 'bold' },
-   privacyItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-   privacyInfo: { flex: 1 },
-   privacyTitle: { color: theme.colors.text, fontSize: 16, fontWeight: '600', marginBottom: 4 },
-   privacyDesc: { color: theme.colors.textSecondary, fontSize: 12, lineHeight: 16 },
-   privacyValue: { color: theme.colors.primary, fontSize: 16, fontWeight: '600' },
-   dangerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.danger + '15', borderRadius: 15, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.danger + '30' },
-   dangerBtnText: { color: theme.colors.danger, fontSize: 14, fontWeight: '600', marginLeft: 10, flex: 1 },
-   valueBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.glass, borderRadius: 20, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border },
-   valueIcon: { width: 40, height: 40, borderRadius: 15, backgroundColor: theme.colors.bg, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-   valueInfo: { flex: 1 },
-   valueTitle: { color: theme.colors.text, fontSize: 16, fontWeight: '600', marginBottom: 2 },
-   valueDesc: { color: theme.colors.textSecondary, fontSize: 12 },
-   actionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.glass, borderRadius: 20, padding: 15, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border },
-   actionIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: theme.colors.bg, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-   actionText: { color: theme.colors.text, fontSize: 16, fontWeight: '600', flex: 1 },
-   saveBtn: { backgroundColor: theme.colors.primary, borderRadius: 25, padding: 18, alignItems: 'center', marginTop: 20 },
-   saveBtnDisabled: { opacity: 0.6 },
-   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
-   footer: { marginTop: 40, paddingHorizontal: 20, paddingBottom: 30, alignItems: 'center' },
-   footerDivider: { height: 1, width: '100%', backgroundColor: theme.colors.border, marginBottom: 20 },
-   footerContent: { alignItems: 'center' },
-   footerText: { color: theme.colors.text, fontSize: 12, fontWeight: '900', letterSpacing: 2, marginBottom: 5 },
-   footerSubtext: { color: theme.colors.textSecondary, fontSize: 10, letterSpacing: 1, marginBottom: 15 },
-   footerIcons: { flexDirection: 'row', marginBottom: 15 },
-   copyright: { color: theme.colors.textSecondary, fontSize: 9 },
-   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-   modalContainer: { width: '85%', backgroundColor: theme.colors.cardBg, borderRadius: 25, padding: 25, alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
-   modalTitle: { fontSize: 20, fontWeight: '900', marginBottom: 20, color: theme.colors.text, letterSpacing: 0.5 },
-   planOption: { width: '100%', padding: 16, borderRadius: 16, marginBottom: 12, alignItems: 'center', borderWidth: 1, backgroundColor: theme.colors.glass },
-   planOptionText: { fontSize: 14, fontWeight: '900', letterSpacing: 1 },
-   cancelButton: { marginTop: 10, padding: 10 },
-   cancelText: { color: theme.colors.textSecondary, fontSize: 14, fontWeight: '600' },
- });
+  const isPremium = (profile?.tier || 'FREE') === 'PREMIUM';
+  const tierColor = isPremium ? '#FFD700' : theme.colors.textSecondary;
+  const currentStyles = styles(theme);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
-      {theme.isDark && (
-        <View style={styles.auroraBg}>
-            <View style={[styles.blob, { top: -100, right: -50, backgroundColor: 'rgba(0, 243, 255, 0.15)' }]} />
-            <View style={[styles.blob, { top: 200, left: -100, backgroundColor: 'rgba(139, 92, 246, 0.15)' }]} />
-        </View>
-      )}
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-              <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.primary} />
+    <View style={currentStyles.container}>
+      <StatusBar style={theme.isDark ? "light" : "dark"} />
+      <SafeAreaView style={{flex:1}}>
+        <ScrollView contentContainerStyle={currentStyles.content} showsVerticalScrollIndicator={false}>
+          
+          {/* HEADER */}
+          <View style={currentStyles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={currentStyles.iconBtn}>
+              <Ionicons name="arrow-back" size={20} color={theme.colors.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>PROFIL NEXUS</Text>
-            <TouchableOpacity onPress={() => setEditing(!editing)} style={styles.editBtn}>
-              <MaterialCommunityIcons name={editing ? "check" : "pencil"} size={24} color={editing ? theme.colors.success : theme.colors.primary} />
+            <Text style={currentStyles.headerTitle}>MON PROFIL</Text>
+            <TouchableOpacity onPress={() => setEditing(!editing)} style={currentStyles.iconBtn}>
+              <Ionicons name={editing ? "checkmark" : "pencil"} size={20} color={editing ? theme.colors.success : theme.colors.text} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.avatarSection}>
-            <LinearGradient colors={[theme.colors.primary, theme.colors.secondary]} style={styles.avatar}>
-              <Text style={styles.avatarText}>{profile?.full_name ? profile.full_name.substring(0, 2).toUpperCase() : 'NX'}</Text>
+          {/* IDENTITÉ VISUELLE */}
+          <View style={currentStyles.idCard}>
+            <LinearGradient 
+                colors={isPremium ? ['#FFD700', '#FFA500'] : [theme.colors.border, theme.colors.glass]} 
+                style={currentStyles.avatarRing}
+            >
+                <View style={currentStyles.avatarContainer}>
+                    <Text style={currentStyles.avatarText}>
+                        {profile?.full_name ? profile.full_name.substring(0, 2).toUpperCase() : 'NX'}
+                    </Text>
+                </View>
             </LinearGradient>
-            <Text style={styles.userName}>{profile?.full_name || 'INITIÉ NEXUS'}</Text>
-            {currentAge && <Text style={styles.userAge}>{currentAge} ans</Text>}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>INFORMATIONS PERSONNELLES</Text>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Nom complet</Text>
-              <TextInput style={[styles.input, editing && styles.inputEditing]} value={editData.full_name} onChangeText={(text) => setEditData({...editData, full_name: text})} editable={editing} placeholder="Votre nom complet" placeholderTextColor={theme.colors.textSecondary} />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Age</Text>
-              <TextInput style={[styles.input, editing && styles.inputEditing]} value={editData.age} onChangeText={(text) => setEditData({...editData, age: text})} editable={editing} placeholder="Vôtre âge" placeholderTextColor={theme.colors.textSecondary} keyboardType="numeric" />
-            </View>
-            <View style={styles.rowInputs}>
-              <View style={[styles.inputGroup, {flex: 1, marginRight: 10}]}>
-                <Text style={styles.inputLabel}>Poids (kg)</Text>
-                <TextInput style={[styles.input, editing && styles.inputEditing]} value={editData.weight} onChangeText={(text) => setEditData({...editData, weight: text})} editable={editing} keyboardType="numeric" placeholder="70" placeholderTextColor={theme.colors.textSecondary} />
-              </View>
-              <View style={[styles.inputGroup, {flex: 1}]}>
-                <Text style={styles.inputLabel}>Taille (cm)</Text>
-                <TextInput style={[styles.input, editing && styles.inputEditing]} value={editData.height} onChangeText={(text) => setEditData({...editData, height: text})} editable={editing} keyboardType="numeric" placeholder="175" placeholderTextColor={theme.colors.textSecondary} />
-              </View>
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Objectif</Text>
-              <TextInput style={[styles.input, editing && styles.inputEditing]} value={editData.goal} onChangeText={(text) => setEditData({...editData, goal: text})} editable={editing} placeholder="Perte de poids, prise de masse..." placeholderTextColor={theme.colors.textSecondary} />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Niveau d'activité</Text>
-              <TextInput style={[styles.input, editing && styles.inputEditing]} value={editData.activity_level} onChangeText={(text) => setEditData({...editData, activity_level: text})} editable={editing} placeholder="Sédentaire, Actif, Très actif..." placeholderTextColor={theme.colors.textSecondary} />
+            <Text style={currentStyles.userName}>{profile?.full_name || 'Utilisateur'}</Text>
+            <View style={[currentStyles.badge, {borderColor: tierColor}]}>
+                <Text style={[currentStyles.badgeText, {color: tierColor}]}>{isPremium ? 'ELITE MEMBER' : 'STANDARD MEMBER'}</Text>
             </View>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>STATISTIQUES</Text>
-            <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <MaterialCommunityIcons name="fire" size={24} color={theme.colors.warning} />
-                <Text style={styles.statValue}>{profile?.streak || 0}</Text>
-                <Text style={styles.statLabel}>Série jours</Text>
-              </View>
-              <View style={styles.statCard}>
-                <MaterialCommunityIcons name="trophy" size={24} color="#ffd700" />
-                <Text style={styles.statValue}>{profile?.points || 0}</Text>
-                <Text style={styles.statLabel}>Points</Text>
-              </View>
-              <View style={styles.statCard}>
-                <MaterialCommunityIcons name="calendar" size={24} color={theme.colors.primary} />
-                <Text style={styles.statValue}>{Math.floor((profile?.points || 0) / 1000) + 1}</Text>
-                <Text style={styles.statLabel}>Niveau</Text>
-              </View>
-            </View>
-          </View>
-          
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>ABONNEMENT</Text>
-            {/* MODIFICATION ICI : Styles dynamiques en ligne */}
-            {/* On passe un tableau de styles : [style_fixe, { style_dynamique }] */}
-            <View style={[
-                styles.subscriptionCard, 
-                { borderColor: currentPlanColor, shadowColor: currentPlanColor }
-            ]}>
-              <View style={styles.subscriptionHeader}>
-                <Text style={styles.subscriptionPlan}>{subscriptionData.currentPlan}</Text>
-                <View style={[styles.planBadge, { backgroundColor: currentPlanColor }]}>
-                  <Text style={styles.planBadgeText}>ACTIF</Text>
-                </View>
-              </View>
-              <View style={styles.subscriptionDetails}>
-                <Text style={styles.subscriptionText}>Renouvellement: {subscriptionData.nextRenewal}</Text>
-                <TouchableOpacity style={styles.toggleBtn} onPress={toggleAutoRenewal}>
-                  <Text style={styles.toggleText}>Renouvellement automatique</Text>
-                  <View style={[styles.toggleSwitch, subscriptionData.autoRenewal && styles.toggleActive]}>
-                    <View style={[styles.toggleCircle, subscriptionData.autoRenewal && styles.toggleCircleActive]} />
+          {/* FORMULAIRE COMPLET */}
+          <Text style={currentStyles.sectionTitle}>PHYSIQUE & SANTÉ</Text>
+          <View style={currentStyles.formContainer}>
+              <View style={currentStyles.inputRow}>
+                  <View style={{flex:1}}>
+                      <Text style={currentStyles.label}>POIDS (KG)</Text>
+                      <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.weight} onChangeText={t => setEditData({...editData, weight: t})} editable={editing} keyboardType="numeric" />
                   </View>
-                </TouchableOpacity>
+                  <View style={{width:15}}/>
+                  <View style={{flex:1}}>
+                      <Text style={currentStyles.label}>TAILLE (CM)</Text>
+                      <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.height} onChangeText={t => setEditData({...editData, height: t})} editable={editing} keyboardType="numeric" />
+                  </View>
               </View>
-              <View style={styles.subscriptionActions}>
-                <TouchableOpacity style={styles.upgradeBtn} onPress={() => handleAccountAction('changePlan')}>
-                  <Text style={styles.upgradeBtnText}>CHANGER DE PLAN</Text>
-                </TouchableOpacity>
+              <View style={{marginTop: 15}}>
+                  <Text style={currentStyles.label}>ÂGE</Text>
+                  <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.age} onChangeText={t => setEditData({...editData, age: t})} editable={editing} keyboardType="numeric" />
               </View>
-            </View>
-            <Text style={styles.historyTitle}>Historique des paiements</Text>
-            {subscriptionData.paymentHistory.map((payment, index) => (
-              <View key={index} style={styles.paymentItem}>
-                <View style={styles.paymentInfo}>
-                  <Text style={styles.paymentDate}>{payment.date}</Text>
-                  <Text style={styles.paymentAmount}>{payment.amount}</Text>
-                </View>
-                <Text style={[styles.paymentStatus, { color: payment.status === 'Réussi' ? theme.colors.success : theme.colors.danger }]}>
-                  {payment.status}
-                </Text>
-              </View>
-            ))}
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>PRÉFÉRENCES</Text>
-            <View style={styles.privacyItem}>
-              <View style={styles.privacyInfo}>
-                <Text style={styles.privacyTitle}>Mode sombre</Text>
-                <Text style={styles.privacyDesc}>Basculer entre le mode sombre et clair</Text>
+          <Text style={currentStyles.sectionTitle}>CONFIGURATION SPORTIVE</Text>
+          <View style={currentStyles.formContainer}>
+              <View style={{marginBottom:15}}>
+                  <Text style={currentStyles.label}>NIVEAU D'EXPÉRIENCE</Text>
+                  <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.experience_level} onChangeText={t => setEditData({...editData, experience_level: t})} editable={editing} placeholder="Débutant, Intermédiaire..." placeholderTextColor={theme.colors.textSecondary} />
               </View>
-              <TouchableOpacity style={styles.toggleBtn} onPress={() => { 
-                  if(Platform.OS !== 'web') Haptics.selectionAsync();
-                  theme.toggleTheme(); 
-              }}>
-                <View style={[styles.toggleSwitch, theme.isDark && styles.toggleActive]}>
-                  <View style={[styles.toggleCircle, theme.isDark && styles.toggleCircleActive]} />
-                </View>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.privacyItem}>
-              <View style={styles.privacyInfo}>
-                <Text style={styles.privacyTitle}>Partage des données</Text>
-                <Text style={styles.privacyDesc}>Autoriser le partage anonyme des statistiques</Text>
+              <View style={{marginBottom:15}}>
+                  <Text style={currentStyles.label}>MATÉRIEL DISPONIBLE</Text>
+                  <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.equipment} onChangeText={t => setEditData({...editData, equipment: t})} editable={editing} placeholder="Salle, Maison, Poids du corps..." placeholderTextColor={theme.colors.textSecondary} />
               </View>
-              <TouchableOpacity style={styles.toggleBtn} onPress={() => togglePrivacySetting('dataSharing')}>
-                <View style={[styles.toggleSwitch, privacySettings.dataSharing && styles.toggleActive]}>
-                  <View style={[styles.toggleCircle, privacySettings.dataSharing && styles.toggleCircleActive]} />
-                </View>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.privacyItem}>
-              <View style={styles.privacyInfo}>
-                <Text style={styles.privacyTitle}>Visibilité du profil</Text>
-                <Text style={styles.privacyDesc}>Contrôler qui peut voir votre profil</Text>
+              <View style={currentStyles.inputRow}>
+                  <View style={{flex:1}}>
+                      <Text style={currentStyles.label}>OBJECTIF</Text>
+                      <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.goal} onChangeText={t => setEditData({...editData, goal: t})} editable={editing} />
+                  </View>
+                  <View style={{width:15}}/>
+                  <View style={{flex:1}}>
+                      <Text style={currentStyles.label}>SÉANCES / SEM</Text>
+                      <TextInput style={[currentStyles.input, editing && currentStyles.inputEditable]} value={editData.training_days} onChangeText={t => setEditData({...editData, training_days: t})} editable={editing} keyboardType="numeric" />
+                  </View>
               </View>
-              <TouchableOpacity style={styles.toggleBtn} onPress={() => {
-                  if (Platform.OS !== 'web') Haptics.selectionAsync();
-                  const visibilities: ('public' | 'private' | 'friends')[] = ['public', 'private', 'friends'];
-                  const currentIndex = visibilities.indexOf(privacySettings.profileVisibility);
-                  const nextIndex = (currentIndex + 1) % visibilities.length;
-                  setPrivacySettings(prev => ({ ...prev, profileVisibility: visibilities[nextIndex] }));
-                }}>
-                <Text style={styles.privacyValue}>
-                  {privacySettings.profileVisibility === 'public' ? 'Public' :
-                   privacySettings.profileVisibility === 'private' ? 'Privé' : 'Amis'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>VALEUR AJOUTÉE</Text>
-            <TouchableOpacity style={styles.valueBtn} onPress={() => Alert.alert('Badges', 'Fonctionnalité à venir')}>
-              <View style={styles.valueIcon}>
-                <MaterialCommunityIcons name="medal" size={24} color="#ffd700" />
-              </View>
-              <View style={styles.valueInfo}>
-                <Text style={styles.valueTitle}>Badges & Récompenses</Text>
-                <Text style={styles.valueDesc}>Découvrez vos achievements débloqués</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.valueBtn} onPress={() => Alert.alert('Export', 'Fonctionnalité à venir')}>
-              <View style={styles.valueIcon}>
-                <MaterialCommunityIcons name="download" size={24} color={theme.colors.accent} />
-              </View>
-              <View style={styles.valueInfo}>
-                <Text style={styles.valueTitle}>Exporter mes données</Text>
-                <Text style={styles.valueDesc}>Téléchargez toutes vos données</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>ACTIONS</Text>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => handleNav('/profile/legal')}>
-              <View style={styles.actionIcon}>
-                <MaterialCommunityIcons name="file-document" size={20} color={theme.colors.primary} />
-              </View>
-              <Text style={styles.actionText}>Conditions générales</Text>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => handleNav('/profile/support')}>
-              <View style={styles.actionIcon}>
-                <MaterialCommunityIcons name="help-circle" size={20} color={theme.colors.success} />
-              </View>
-              <Text style={styles.actionText}>Support & Aide</Text>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          
           {editing && (
-            <TouchableOpacity style={[styles.saveBtn, loading && styles.saveBtnDisabled]} onPress={saveProfile} disabled={loading}>
-              <Text style={styles.saveBtnText}>{loading ? 'SAUVEGARDE...' : 'SAUVEGARDER'}</Text>
+            <TouchableOpacity style={currentStyles.saveBtn} onPress={saveProfile} disabled={loading}>
+                <Text style={currentStyles.saveBtnText}>{loading ? 'SAUVEGARDE...' : 'ENREGISTRER LES MODIFICATIONS'}</Text>
             </TouchableOpacity>
           )}
-          
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>GESTION DE COMPTE</Text>
-            <TouchableOpacity style={styles.dangerBtn} onPress={() => handleAccountAction('logout')}>
-              <MaterialCommunityIcons name="logout" size={20} color={theme.colors.text} />
-              <Text style={[styles.dangerBtnText, {color: theme.colors.text}]}>SE DÉCONNECTER</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.dangerBtn} onPress={() => handleAccountAction('delete')}>
-              <MaterialCommunityIcons name="delete-forever" size={20} color={theme.colors.danger} />
-              <Text style={[styles.dangerBtnText, {color: theme.colors.danger}]}>SUPPRESSION DÉFINITIVE</Text>
-            </TouchableOpacity>
+
+          {/* ABONNEMENT */}
+          <Text style={currentStyles.sectionTitle}>ABONNEMENT</Text>
+          <TouchableOpacity activeOpacity={0.9} onPress={() => setShowSubscriptionModal(true)} style={currentStyles.subCard}>
+            <LinearGradient colors={isPremium ? ['#FFD700', '#B8860B'] : [theme.colors.glass, theme.colors.cardBg]} start={{x:0, y:0}} end={{x:1, y:1}} style={currentStyles.subGradient}>
+                <View style={{flexDirection:'row', justifyContent:'space-between'}}>
+                    <MaterialCommunityIcons name="check-decagram" size={24} color={isPremium ? '#FFF' : theme.colors.textSecondary} />
+                    <Text style={[currentStyles.subPrice, isPremium && {color:'#FFF'}]}>{isPremium ? '5.99€' : 'GRATUIT'}</Text>
+                </View>
+                <View>
+                    <Text style={[currentStyles.subName, isPremium && {color:'#FFF'}]}>{isPremium ? 'NEXUS ELITE' : 'DÉCOUVERTE'}</Text>
+                    <Text style={[currentStyles.subDesc, isPremium && {color:'rgba(255,255,255,0.8)'}]}>{isPremium ? 'Accès illimité' : 'Accès limité. Touchez pour upgrader.'}</Text>
+                </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* ACTIONS */}
+          <Text style={currentStyles.sectionTitle}>PARAMÈTRES</Text>
+          <View style={currentStyles.settingsContainer}>
+              <TouchableOpacity style={currentStyles.settingRow} onPress={theme.toggleTheme}>
+                  <Text style={currentStyles.settingText}>Mode Sombre / Clair</Text>
+                  <Ionicons name={theme.isDark ? "moon" : "sunny"} size={18} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={currentStyles.settingRow} onPress={() => router.push('/profile/support')}>
+                  <Text style={currentStyles.settingText}>Support & Aide</Text>
+                  <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={currentStyles.settingRow} onPress={() => router.push('/profile/legal')}>
+                  <Text style={currentStyles.settingText}>Mentions Légales & CGU</Text>
+                  <Ionicons name="document-text-outline" size={18} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={[currentStyles.settingRow, {borderBottomWidth:0}]} onPress={handleLogout}>
+                  <Text style={[currentStyles.settingText, {color: theme.colors.danger}]}>Déconnexion</Text>
+                  <MaterialCommunityIcons name="logout" size={18} color={theme.colors.danger} />
+              </TouchableOpacity>
           </View>
 
-          <View style={{ height: 100 }} />
-          
-          <View style={styles.footer}>
-            <View style={styles.footerDivider} />
-            <View style={styles.footerContent}>
-              <Text style={styles.footerText}>NEXUS AI FIT v1.0</Text>
-              <Text style={styles.footerSubtext}>SYSTÈME DE GESTION BIOLOGIQUE AVANCÉ</Text>
-              <View style={styles.footerIcons}>
-                <MaterialCommunityIcons name="shield-check-outline" size={16} color={theme.colors.textSecondary} style={{marginRight: 15}} />
-                <MaterialCommunityIcons name="server-network" size={16} color={theme.colors.textSecondary} style={{marginRight: 15}} />
-                <MaterialCommunityIcons name="brain" size={16} color={theme.colors.textSecondary} />
-              </View>
-              <Text style={styles.copyright}>© 2025 NEXUS INC. TOUS DROITS RÉSERVÉS.</Text>
-            </View>
-          </View>
+          <View style={{height: 50}}/>
         </ScrollView>
 
-        {/* MODALE D'ABONNEMENT SIMPLIFIÉE */}
+        {/* MODAL */}
         <Modal animationType="fade" transparent={true} visible={showSubscriptionModal} onRequestClose={() => setShowSubscriptionModal(false)}>
-            <View style={styles.modalOverlay}>
-                <View style={styles.modalContainer}>
-                    <Text style={styles.modalTitle}>CHOISIR UN ABONNEMENT</Text>
-                    
-                    <TouchableOpacity style={[styles.planOption, {borderColor: theme.colors.textSecondary}]} onPress={() => updateTier('FREE')}>
-                        <Text style={[styles.planOptionText, {color: theme.colors.textSecondary}]}>GRATUIT (0€)</Text>
+            <View style={currentStyles.modalOverlay}>
+                <View style={currentStyles.modalContainer}>
+                    <Text style={currentStyles.modalTitle}>CHOISIR VOTRE NIVEAU</Text>
+                    <TouchableOpacity style={currentStyles.planOption} onPress={() => updateTier('FREE')}>
+                        <Text style={{color: theme.colors.textSecondary, fontWeight:'bold'}}>DÉCOUVERTE (Gratuit)</Text>
                     </TouchableOpacity>
-                    
-                    <TouchableOpacity style={[styles.planOption, {borderColor: '#ffd700', backgroundColor: theme.isDark ? 'rgba(255, 215, 0, 0.1)' : '#fffbeb'}]} onPress={() => updateTier('PREMIUM')}>
-                        <Text style={[styles.planOptionText, {color: '#ffd700'}]}>PREMIUM (5.99€/mois)</Text>
+                    <TouchableOpacity style={[currentStyles.planOption, {borderColor: '#FFD700', backgroundColor: theme.isDark ? '#FFD70020' : '#FFF8E1'}]} onPress={() => updateTier('PREMIUM')}>
+                        <Text style={{color: '#FFD700', fontWeight:'bold'}}>ELITE (5.99€/mois)</Text>
                     </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.cancelButton} onPress={() => setShowSubscriptionModal(false)}>
-                        <Text style={styles.cancelText}>Annuler</Text>
+                    <TouchableOpacity style={{marginTop:15}} onPress={() => setShowSubscriptionModal(false)}>
+                        <Text style={{color: theme.colors.textSecondary}}>Annuler</Text>
                     </TouchableOpacity>
                 </View>
             </View>
         </Modal>
       </SafeAreaView>
     </View>
-);
+  );
 }
+
+const styles = (theme: any) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.bg },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15 },
+    iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
+    headerTitle: { color: theme.colors.text, fontSize: 14, fontWeight: '900', letterSpacing: 2 },
+    content: { padding: 20, paddingTop: 0 },
+    idCard: { alignItems: 'center', marginBottom: 30, marginTop: 10 },
+    avatarRing: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
+    avatarContainer: { width: 94, height: 94, borderRadius: 47, backgroundColor: theme.colors.bg, justifyContent: 'center', alignItems: 'center' },
+    avatarText: { fontSize: 32, fontWeight: '900', color: theme.colors.text },
+    userName: { fontSize: 24, fontWeight: 'bold', color: theme.colors.text, marginBottom: 5 },
+    badge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
+    badgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+    sectionTitle: { fontSize: 11, fontWeight: '900', color: theme.colors.textSecondary, marginBottom: 12, letterSpacing: 1.5, marginLeft: 5 },
+    subCard: { height: 140, borderRadius: 20, overflow: 'hidden', marginBottom: 30 },
+    subGradient: { flex: 1, padding: 20, justifyContent: 'space-between' },
+    subPrice: { fontSize: 18, fontWeight: '900', color: theme.colors.text },
+    subName: { fontSize: 22, fontWeight: 'bold', color: theme.colors.text, letterSpacing: 1 },
+    subDesc: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 5 },
+    formContainer: { backgroundColor: theme.colors.glass, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 30 },
+    inputRow: { flexDirection: 'row' },
+    label: { fontSize: 10, fontWeight: 'bold', color: theme.colors.textSecondary, marginBottom: 8, marginLeft: 2 },
+    input: { backgroundColor: theme.colors.bg, borderRadius: 12, padding: 12, color: theme.colors.textSecondary, fontSize: 14, borderWidth: 1, borderColor: 'transparent' },
+    inputEditable: { borderColor: theme.colors.primary, color: theme.colors.text, borderWidth: 1 },
+    saveBtn: { backgroundColor: theme.colors.primary, padding: 16, borderRadius: 16, alignItems: 'center', marginBottom: 30 },
+    saveBtnText: { color: '#fff', fontWeight: '900', fontSize: 12, letterSpacing: 1 },
+    settingsContainer: { backgroundColor: theme.colors.glass, borderRadius: 20, paddingHorizontal: 20, borderWidth: 1, borderColor: theme.colors.border },
+    settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+    settingText: { fontSize: 14, fontWeight: '600', color: theme.colors.text },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
+    modalContainer: { width: '85%', backgroundColor: theme.colors.cardBg, borderRadius: 24, padding: 25, alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
+    modalTitle: { fontSize: 16, fontWeight: '900', color: theme.colors.text, marginBottom: 20, letterSpacing: 1 },
+    planOption: { width: '100%', padding: 15, borderRadius: 12, borderWidth: 1, alignItems: 'center', marginBottom: 10 },
+});

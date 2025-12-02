@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Platform, Image, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Platform, Image, Linking, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../lib/theme';
-import { EXERCISES_DB } from './exercises_db'; 
+// Nous remplaçons l'import statique par le hook connecté à Supabase
+import { useExercises } from '../hooks/useExercises';
 
 const FILTERS = [
     { id: 'Tous', icon: 'apps' },
@@ -23,17 +24,22 @@ const FILTERS = [
 export default function ExerciseLibraryScreen() {
   const router = useRouter();
   const theme = useTheme();
+  
+  // Utilisation du Hook personnalisé pour récupérer les données (Pilier 2)
+  const { exercises, loading } = useExercises();
+
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('Tous');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Filtrage mis à jour pour utiliser les données dynamiques 'exercises'
   const filteredExercises = useMemo(() => {
-    return EXERCISES_DB.filter(ex => {
+    return exercises.filter(ex => {
       const matchesSearch = ex.name.toLowerCase().includes(search.toLowerCase());
       const matchesFilter = activeFilter === 'Tous' || ex.muscle === activeFilter;
       return matchesSearch && matchesFilter;
     });
-  }, [search, activeFilter]);
+  }, [search, activeFilter, exercises]);
 
   const toggleExpand = (id: string) => {
     if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -150,6 +156,9 @@ export default function ExerciseLibraryScreen() {
   
     emptyState: { alignItems: 'center', marginTop: 50 },
     emptyText: { color: theme.colors.textSecondary, marginTop: 10, fontWeight: 'bold' },
+    
+    // Style pour le chargement
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' }
   });
 
   return (
@@ -171,7 +180,7 @@ export default function ExerciseLibraryScreen() {
             </TouchableOpacity>
             <View>
                 <Text style={styles.headerTitle}>BIBLIOTHÈQUE NEXUS</Text>
-                <Text style={styles.headerSub}>{filteredExercises.length} MOUVEMENTS DISPONIBLES</Text>
+                <Text style={styles.headerSub}>{exercises.length} MOUVEMENTS DISPONIBLES</Text>
             </View>
             <View style={{ width: 40 }} />
         </View>
@@ -223,85 +232,94 @@ export default function ExerciseLibraryScreen() {
             />
         </View>
 
-        <FlatList
-            data={filteredExercises}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            initialNumToRender={10}
-            maxToRenderPerBatch={10}
-            windowSize={5}
-            renderItem={({ item }) => {
-                const isExpanded = expandedId === item.id;
-                const diffColor = getDifficultyColor(item.difficulty);
+        {/* GESTION DE L'ÉTAT DE CHARGEMENT */}
+        {loading ? (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={{color: theme.colors.textSecondary, marginTop: 10}}>Chargement de la base de données...</Text>
+            </View>
+        ) : (
+            <FlatList
+                data={filteredExercises}
+                // Utilisation de l'ID Supabase (UUID) ou code_id comme clé
+                keyExtractor={item => item.id}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                renderItem={({ item }) => {
+                    const isExpanded = expandedId === item.id;
+                    const diffColor = getDifficultyColor(item.difficulty);
 
-                return (
-                    <TouchableOpacity 
-                        style={[styles.card, isExpanded && styles.cardExpanded]} 
-                        onPress={() => toggleExpand(item.id)}
-                        activeOpacity={0.9}
-                    >
-                        <LinearGradient
-                             colors={theme.isDark 
-                                ? (isExpanded ? ['rgba(0, 243, 255, 0.05)', 'rgba(0, 0, 0, 0)'] : ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.01)'])
-                                : ['transparent', 'transparent']
-                             }
-                             style={styles.cardGradient}
+                    return (
+                        <TouchableOpacity 
+                            style={[styles.card, isExpanded && styles.cardExpanded]} 
+                            onPress={() => toggleExpand(item.id)}
+                            activeOpacity={0.9}
                         >
-                            <View style={styles.cardHeader}>
-                                <View style={[styles.iconBox, { borderColor: diffColor + '40' }]}>
-                                    <MaterialCommunityIcons name="dumbbell" size={20} color={diffColor} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.exName}>{item.name}</Text>
-                                    <Text style={styles.exSubtitle}>{item.muscle} • {item.equipment}</Text>
-                                </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                    <View style={[
-                                        styles.badge, 
-                                        { 
-                                            backgroundColor: theme.isDark ? diffColor + '20' : diffColor + '15', 
-                                            borderColor: diffColor 
-                                        }
-                                    ]}>
-                                        <Text style={[styles.badgeText, { color: diffColor }]}>
-                                            {item.difficulty.toUpperCase().slice(0, 3)}
-                                        </Text>
+                            <LinearGradient
+                                colors={theme.isDark 
+                                    ? (isExpanded ? ['rgba(0, 243, 255, 0.05)', 'rgba(0, 0, 0, 0)'] : ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.01)'])
+                                    : ['transparent', 'transparent']
+                                }
+                                style={styles.cardGradient}
+                            >
+                                <View style={styles.cardHeader}>
+                                    <View style={[styles.iconBox, { borderColor: diffColor + '40' }]}>
+                                        <MaterialCommunityIcons name="dumbbell" size={20} color={diffColor} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.exName}>{item.name}</Text>
+                                        <Text style={styles.exSubtitle}>{item.muscle} • {item.equipment}</Text>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end' }}>
+                                        <View style={[
+                                            styles.badge, 
+                                            { 
+                                                backgroundColor: theme.isDark ? diffColor + '20' : diffColor + '15', 
+                                                borderColor: diffColor 
+                                            }
+                                        ]}>
+                                            <Text style={[styles.badgeText, { color: diffColor }]}>
+                                                {item.difficulty.toUpperCase().slice(0, 3)}
+                                            </Text>
+                                        </View>
                                     </View>
                                 </View>
-                            </View>
 
-                            {isExpanded && (
-                                <View style={styles.cardBody}>
-                                    <View style={styles.divider} />
-                                    
-                                    <Text style={styles.instructionLabel}>PROTOCOLE D'EXÉCUTION :</Text>
-                                    <Text style={styles.instructionText}>{item.instructions}</Text>
+                                {isExpanded && (
+                                    <View style={styles.cardBody}>
+                                        <View style={styles.divider} />
+                                        
+                                        <Text style={styles.instructionLabel}>PROTOCOLE D'EXÉCUTION :</Text>
+                                        <Text style={styles.instructionText}>{item.instructions}</Text>
 
-                                    <View style={styles.actionsRow}>
-                                        <TouchableOpacity style={styles.videoBtn} onPress={() => openVideoDemo(item.name)}>
-                                            <MaterialCommunityIcons name="youtube" size={20} color="#ff0000" />
-                                            <Text style={styles.videoBtnText}>VOIR DÉMO</Text>
-                                        </TouchableOpacity>
+                                        <View style={styles.actionsRow}>
+                                            <TouchableOpacity style={styles.videoBtn} onPress={() => openVideoDemo(item.name)}>
+                                                <MaterialCommunityIcons name="youtube" size={20} color="#ff0000" />
+                                                <Text style={styles.videoBtnText}>VOIR DÉMO</Text>
+                                            </TouchableOpacity>
 
-                                        <TouchableOpacity style={styles.addBtn}>
-                                            <MaterialCommunityIcons name="plus" size={20} color={theme.colors.primary} />
-                                            <Text style={styles.addBtnText}>AJOUTER</Text>
-                                        </TouchableOpacity>
+                                            <TouchableOpacity style={styles.addBtn}>
+                                                <MaterialCommunityIcons name="plus" size={20} color={theme.colors.primary} />
+                                                <Text style={styles.addBtnText}>AJOUTER</Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
-                                </View>
-                            )}
-                        </LinearGradient>
-                    </TouchableOpacity>
-                );
-            }}
-            ListEmptyComponent={
-                <View style={styles.emptyState}>
-                    <MaterialCommunityIcons name="dumbbell" size={48} color={theme.colors.textSecondary} />
-                    <Text style={styles.emptyText}>Aucun exercice trouvé pour "{search}"</Text>
-                </View>
-            }
-        />
+                                )}
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    );
+                }}
+                ListEmptyComponent={
+                    <View style={styles.emptyState}>
+                        <MaterialCommunityIcons name="dumbbell" size={48} color={theme.colors.textSecondary} />
+                        <Text style={styles.emptyText}>Aucun exercice trouvé pour "{search}"</Text>
+                    </View>
+                }
+            />
+        )}
 
       </SafeAreaView>
     </View>

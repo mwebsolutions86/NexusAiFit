@@ -14,6 +14,7 @@
     "@supabase/supabase-js": "^2.84.0",
     "expo": "~54.0.25",
     "expo-av": "~16.0.7",
+    "expo-build-properties": "~1.0.9",
     "expo-constants": "~18.0.10",
     "expo-haptics": "~15.0.7",
     "expo-linear-gradient": "~15.0.7",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "supabase": "^2.64.2",
     "tailwindcss": "^4.1.17",
     "typescript": "~5.9.2"
   },

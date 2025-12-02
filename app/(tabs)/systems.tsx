@@ -25,22 +25,13 @@ interface ModuleSection {
   items: ModuleItem[];
 }
 
-// --- NOUVELLE CONFIGURATION D'ACCÈS (BINAIRE) ---
+// --- CONFIGURATION D'ACCÈS (INCHANGÉE) ---
 const ACCESS_RULES: any = {
-    // GRATUIT : Les outils de base uniquement
-    FREE: [
-        'bmi', 'tdee', 'water',     // Santé simple
-        '1rm', 'timer',            // Outils sportifs
-        'breath',                 // Respiration simple
-        'exercise-library',      // Bibliothèque
-        'shopping'              // Liste de courses
-      ],
-    
-    // PREMIUM : Accès total
+    FREE: ['bmi', 'tdee', 'water', '1rm', 'timer', 'breath', 'exercise-library', 'shopping'],
     PREMIUM: ['all']
 };
 
-// --- LISTE DES MODULES ---
+// --- LISTE DES MODULES (INCHANGÉE) ---
 const MODULES: ModuleSection[] = [
   {
     category: "BIO-TRACKING",
@@ -115,7 +106,6 @@ export default function Systems() {
           if (data?.tier) {
               let tier = 'FREE';
               const t = (data.tier || '').toUpperCase();
-              // Mappage pour compatibilité ancien système -> nouveau
               if (['PREMIUM', 'ELITE', 'AVANCE', 'ESSENTIEL'].includes(t)) tier = 'PREMIUM';
               setUserTier(tier);
           }
@@ -127,9 +117,7 @@ export default function Systems() {
   const isLocked = (moduleId: string, comingSoon?: boolean) => {
       if (comingSoon) return false;
       if (userTier === 'PREMIUM') return false; 
-      
-      const allowedModules = ACCESS_RULES.FREE;
-      return !allowedModules.includes(moduleId);
+      return !ACCESS_RULES.FREE.includes(moduleId);
   };
 
   const handlePress = (module: ModuleItem) => {
@@ -142,90 +130,87 @@ export default function Systems() {
 
     if (isLocked(module.id, false)) {
         if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        
         Alert.alert(
             "MODULE PREMIUM", 
-            `Passez à la version Premium pour débloquer ${module.name} et tout le potentiel de NexusAiFit.`,
+            `Passez à la version Elite pour débloquer ${module.name}.`,
             [
                 { text: "Annuler", style: "cancel" },
-                { text: "VOIR L'OFFRE (5.99€)", onPress: () => router.push('/profile' as any) } 
+                { text: "DÉBLOQUER", onPress: () => router.push('/profile' as any) } 
             ]
         );
         return;
     }
 
     const moduleRoutes: { [key: string]: string } = {
-      'body_fat': '/features/body_fat',
-      'water': '/features/water',
-      'timer': '/features/timer',
-      '1rm': '/features/calculator1rm',
-      'tdee': '/features/tdee',
-      'bmi': '/features/bmi',
-      'macros': '/features/macros',
-      'meditation': '/features/meditation',
-      'mood': '/features/mood',
-      'food-journal': '/features/food-journal',
-      'exercise-library': '/features/exercise-library',
-      'sleep': '/features/sleep',
-      'stress': '/features/stress',
-      'heart': '/features/heart',
-      'body': '/features/body',
-      'workout_log': '/features/workout_log',
-      'reflex': '/features/reflex',
-      'vision': '/features/vision',
-      'posture': '/features/posture',
-      'shopping': '/features/shopping',
-      'supps': '/features/supps',
-      'fasting': '/features/fasting',
-      'meal_prep': '/features/meal_prep',
-      'breath': '/features/breath',
-      'stretching': '/features/stretching',
-      'journaling': '/features/journaling',
-      'cold': '/features/cold',
-      'nootropics': '/features/nootropics',
-      'env': '/features/env',
-      'hrv': '/features/hrv',
-      'discharge': '/features/discharge',
+      'body_fat': '/features/body_fat', 'water': '/features/water', 'timer': '/features/timer',
+      '1rm': '/features/calculator1rm', 'tdee': '/features/tdee', 'bmi': '/features/bmi',
+      'macros': '/features/macros', 'meditation': '/features/meditation', 'mood': '/features/mood',
+      'food-journal': '/features/food-journal', 'exercise-library': '/features/exercise-library',
+      'sleep': '/features/sleep', 'stress': '/features/stress', 'heart': '/features/heart',
+      'body': '/features/body', 'workout_log': '/features/workout_log', 'reflex': '/features/reflex',
+      'vision': '/features/vision', 'posture': '/features/posture', 'shopping': '/features/shopping',
+      'supps': '/features/supps', 'fasting': '/features/fasting', 'meal_prep': '/features/meal_prep',
+      'breath': '/features/breath', 'stretching': '/features/stretching', 'journaling': '/features/journaling',
+      'cold': '/features/cold', 'nootropics': '/features/nootropics', 'env': '/features/env',
+      'hrv': '/features/hrv', 'discharge': '/features/discharge',
     };
 
     const route = moduleRoutes[module.id];
-    if (route) {
-      router.push(route as any);
-      return;
-    }
+    if (route) router.push(route as any);
   };
 
-  // ... (Styles inchangés, assurez-vous qu'ils utilisent theme.colors)
-  // Je garde les styles du fichier précédent pour la concision, 
-  // assurez-vous juste de bien avoir les imports et le reste du composant comme avant.
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.bg },
     safeArea: { flex: 1, paddingTop: Platform.OS === 'android' ? 25 : 0 },
     auroraBg: { ...StyleSheet.absoluteFillObject, zIndex: -1 },
-    blob: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.4 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 20, marginTop: Platform.OS === 'ios' ? 10 : 0 },
-    headerTitle: { color: theme.colors.text, fontSize: 12, fontWeight: 'bold', letterSpacing: 2 },
-    statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-    statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
-    statusText: { fontSize: 10, fontWeight: 'bold', color: theme.colors.textSecondary },
-    glassIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
-    content: { padding: 20, paddingTop: 0 },
-    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.glass, paddingHorizontal: 15, borderRadius: 16, marginBottom: 30, borderWidth: 1, borderColor: theme.colors.border, height: 50 },
-    searchInput: { flex: 1, color: theme.colors.text, marginLeft: 10, fontSize: 14 },
-    section: { marginBottom: 25 },
+    blob: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.3 },
+    
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 15, paddingBottom: 20 },
+    headerTitle: { fontSize: 12, color: theme.colors.textSecondary, fontWeight: '600', letterSpacing: 2, textTransform: 'uppercase' },
+    headerSub: { fontSize: 22, fontWeight: '300', color: theme.colors.text, marginTop: 2 },
+    
+    tierBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: userTier === 'PREMIUM' ? '#FFD70020' : theme.colors.glass, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: userTier === 'PREMIUM' ? '#FFD700' : theme.colors.border },
+    tierText: { fontSize: 10, fontWeight: '900', color: userTier === 'PREMIUM' ? '#FFD700' : theme.colors.textSecondary, letterSpacing: 1 },
+
+    searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.glass, paddingHorizontal: 15, borderRadius: 16, marginBottom: 30, marginHorizontal: 20, borderWidth: 1, borderColor: theme.colors.border, height: 50 },
+    searchInput: { flex: 1, color: theme.colors.text, marginLeft: 10, fontSize: 15 },
+
+    content: { paddingHorizontal: 20, paddingBottom: 100 },
+    section: { marginBottom: 30 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-    sectionTitle: { color: theme.colors.textSecondary, fontSize: 12, fontWeight: '900', letterSpacing: 1, marginLeft: 8, marginRight: 10 },
-    line: { flex: 1, height: 1, backgroundColor: theme.colors.border },
+    sectionTitle: { color: theme.colors.textSecondary, fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginLeft: 10 },
+    line: { width: 3, height: 12, backgroundColor: theme.colors.primary, borderRadius: 2 },
+    
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    moduleCard: { width: (width - 52) / 2, height: 120, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.glass, shadowColor: theme.isDark ? 'transparent' : '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: theme.isDark ? 0 : 0.05, shadowRadius: 6, elevation: theme.isDark ? 0 : 2 },
-    moduleLocked: { borderColor: theme.colors.border, opacity: 0.7, backgroundColor: theme.isDark ? 'rgba(255,255,255,0.02)' : '#f0f0f0' },
+    
+    // --- DESIGN LUXE ADAPTATIF ---
+    moduleCard: { 
+        width: (width - 52) / 2, 
+        height: 110, 
+        borderRadius: 20, 
+        overflow: 'hidden', 
+        borderWidth: 1, 
+        // Bordure plus visible en mode clair
+        borderColor: theme.isDark ? theme.colors.border : '#E5E7EB', 
+        backgroundColor: theme.colors.glass, 
+        // Ombres renforcées en mode clair pour détacher la carte
+        shadowColor: theme.isDark ? 'transparent' : '#000', 
+        shadowOffset: { width: 0, height: 4 }, 
+        shadowOpacity: theme.isDark ? 0 : 0.08, 
+        shadowRadius: 8, 
+        elevation: theme.isDark ? 0 : 3 
+    },
     cardContent: { flex: 1, padding: 15, justifyContent: 'space-between' },
+    
     cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    iconContainer: { padding: 10, borderRadius: 14, borderWidth: 1 },
-    lockBadge: { position: 'absolute', top: 0, right: 0, width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-    statusBadge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.glass },
-    statusBadgeText: { fontSize: 8, fontWeight: '900' },
-    moduleName: { color: theme.colors.text, fontSize: 13, fontWeight: '600', lineHeight: 18 },
+    iconContainer: { width: 38, height: 38, borderRadius: 12, justifyContent:'center', alignItems:'center' },
+    
+    lockBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: theme.colors.cardBg, padding: 4, borderRadius: 8 },
+    proBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#FFD700', backgroundColor: '#FFD70010' },
+    proText: { fontSize: 8, fontWeight: '900', color: '#FFD700' },
+    
+    moduleName: { color: theme.colors.text, fontSize: 13, fontWeight: 'bold', lineHeight: 18 },
+    lockedText: { color: theme.colors.textSecondary }
   });
 
   return (
@@ -234,66 +219,82 @@ export default function Systems() {
       {theme.isDark && (
         <View style={styles.auroraBg}>
             <View style={[styles.blob, { top: -50, left: -100, backgroundColor: 'rgba(0, 243, 255, 0.15)' }]} />
-            <View style={[styles.blob, { top: '40%', right: -100, backgroundColor: 'rgba(139, 92, 246, 0.1)' }]} />
-            <View style={[styles.blob, { bottom: -100, left: 50, backgroundColor: 'rgba(59, 130, 246, 0.15)' }]} />
+            <View style={[styles.blob, { bottom: -100, right: -50, backgroundColor: 'rgba(139, 92, 246, 0.15)' }]} />
         </View>
       )}
+      
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
             <View>
-                <Text style={styles.headerTitle}>CENTRE DE COMMANDE</Text>
-                <View style={styles.statusRow}>
-                    <View style={[styles.statusDot, { backgroundColor: userTier === 'PREMIUM' ? '#ffd700' : theme.colors.textSecondary }]} />
-                    <Text style={[styles.statusText, { color: theme.colors.textSecondary }]}>
-                        {userTier === 'FREE' ? 'DÉCOUVERTE' : 'MEMBRE PREMIUM'}
-                    </Text>
-                </View>
+                <Text style={styles.headerTitle}>SYSTÈMES</Text>
+                <Text style={styles.headerSub}>Centre de Commande</Text>
             </View>
-            <View style={styles.glassIcon}>
-                <MaterialCommunityIcons name="grid" size={20} color={theme.colors.text} />
+            <View style={styles.tierBadge}>
+                <Text style={styles.tierText}>{userTier === 'PREMIUM' ? 'ELITE' : 'STANDARD'}</Text>
             </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            <View style={styles.searchContainer}>
-                <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
-                <TextInput style={styles.searchInput} placeholder="Rechercher un protocole..." placeholderTextColor={theme.colors.textSecondary} value={search} onChangeText={setSearch} />
-            </View>
+        <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
+            <TextInput 
+                style={styles.searchInput} 
+                placeholder="Rechercher un protocole..." 
+                placeholderTextColor={theme.colors.textSecondary} 
+                value={search} 
+                onChangeText={setSearch} 
+            />
+        </View>
 
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             {MODULES.map((section, index) => (
                 <View key={index} style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <MaterialCommunityIcons name="folder-outline" size={14} color={theme.colors.textSecondary} />
-                        <Text style={styles.sectionTitle}>{section.category}</Text>
                         <View style={styles.line} />
+                        <Text style={styles.sectionTitle}>{section.category}</Text>
                     </View>
                     <View style={styles.grid}>
                         {section.items.filter(i => i.name.toLowerCase().includes(search.toLowerCase())).map((item, i) => {
                             const locked = isLocked(item.id, item.comingSoon);
                             return (
-                                <TouchableOpacity key={i} style={[styles.moduleCard, locked && styles.moduleLocked]} onPress={() => handlePress(item)} activeOpacity={0.7}>
-                                    <LinearGradient colors={theme.isDark ? (locked ? ['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.8)'] : ['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']) : ['transparent', 'transparent']} style={styles.cardContent}>
+                                <TouchableOpacity 
+                                    key={i} 
+                                    style={[
+                                        styles.moduleCard, 
+                                        locked && {
+                                            opacity: 0.8, 
+                                            borderColor: theme.colors.border,
+                                            backgroundColor: theme.isDark ? 'rgba(255,255,255,0.02)' : '#F3F4F6' // Fond grisé pour locked en mode clair
+                                        }
+                                    ]} 
+                                    onPress={() => handlePress(item)} 
+                                    activeOpacity={0.8}
+                                >
+                                    <LinearGradient 
+                                        // --- DÉGRADÉ ADAPTATIF LUXE ---
+                                        colors={theme.isDark 
+                                            ? (locked ? ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.02)'] : ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)']) 
+                                            : (locked ? ['transparent', 'transparent'] : ['#ffffff', 'rgba(255,255,255,0.5)']) // Blanc pur vers léger transp. pour mode clair
+                                        }
+                                        style={styles.cardContent}
+                                    >
                                             <View style={styles.cardTop}>
-                                                <View style={[styles.iconContainer, { backgroundColor: locked ? theme.colors.cardBg : (theme.isDark ? `${item.color}15` : `${item.color}20`), borderColor: locked ? theme.colors.border : (theme.isDark ? `${item.color}30` : 'transparent') }]}>
-                                                    <MaterialCommunityIcons name={item.icon} size={24} color={locked ? theme.colors.textSecondary : item.color} />
+                                                <View style={[styles.iconContainer, { backgroundColor: locked ? theme.colors.textSecondary + '15' : item.color + '20' }]}>
+                                                    <MaterialCommunityIcons name={item.icon} size={20} color={locked ? theme.colors.textSecondary : item.color} />
                                                 </View>
+                                                
                                                 {locked && !item.comingSoon && (
                                                     <View style={styles.lockBadge}>
-                                                        <MaterialCommunityIcons name="lock" size={10} color="#fff" />
+                                                        <MaterialCommunityIcons name="lock" size={12} color={theme.colors.textSecondary} />
                                                     </View>
                                                 )}
-                                                {item.comingSoon && (
-                                                     <View style={[styles.statusBadge, {backgroundColor: theme.colors.border}]}>
-                                                        <Text style={[styles.statusBadgeText, {color: theme.colors.textSecondary}]}>BETA</Text>
-                                                     </View>
-                                                )}
-                                                {!locked && !item.comingSoon && item.status === 'PREMIUM' && (
-                                                     <View style={[styles.statusBadge, {borderColor: '#ffd700'}]}>
-                                                        <Text style={[styles.statusBadgeText, {color: '#ffd700'}]}>PRO</Text>
+                                                
+                                                {!locked && item.status === 'PREMIUM' && (
+                                                     <View style={styles.proBadge}>
+                                                        <Text style={styles.proText}>PRO</Text>
                                                      </View>
                                                 )}
                                             </View>
-                                            <Text style={[styles.moduleName, locked && {color: theme.colors.textSecondary}]} numberOfLines={2}>{item.name}</Text>
+                                            <Text style={[styles.moduleName, locked && styles.lockedText]} numberOfLines={2}>{item.name}</Text>
                                     </LinearGradient>
                                 </TouchableOpacity>
                             );
@@ -301,7 +302,6 @@ export default function Systems() {
                     </View>
                 </View>
             ))}
-            <View style={{height: 100}} />
         </ScrollView>
       </SafeAreaView>
     </View>

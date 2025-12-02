@@ -1,38 +1,58 @@
 {
   "expo": {
     "name": "NexusAiFit",
-    "slug": "NexusAiFit",
-    "scheme":"nexusaifit",
+    "slug": "nexusaifit",
+    "scheme": "nexusaifit",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/NexusFitAILogo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mohcinemz86.nexusaifit",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Nécessaire pour la mesure du rythme cardiaque via le capteur photo.",
+        "NSMicrophoneUsageDescription": "Utilisé pour l'analyse sonore de votre environnement d'entraînement."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "package": "com.mohcinemz86.nexusaifit",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
-    "extra": {
-      "supabaseUrl": "https://tszwhzbmdboconntitfi.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzendoemJtZGJvY29ubnRpdGZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3NjUxNjMsImV4cCI6MjA3OTM0MTE2M30.kn55Xge44uqpokbyI_BYEEBl4UCUSTSq5P2q-whJbAA"
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }
