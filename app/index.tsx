@@ -400,7 +400,7 @@ export default function LandingScreen() {
                         <MaterialCommunityIcons name="server-network" size={16} color="#666" style={{marginRight: 15}} />
                         <MaterialCommunityIcons name="brain" size={16} color="#666" />
                     </View>
-                    <Text style={styles.copyright}>© 2025 NEXUS INC. TOUS DROITS RÉSERVÉS.</Text>
+                    <Text style={styles.copyright}>© 2025 NEXUS INC / Powerd by Mazouz Web Solutions / TOUS DROITS RÉSERVÉS.</Text>
                 </View>
             </View>
 

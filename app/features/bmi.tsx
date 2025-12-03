@@ -8,12 +8,14 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../lib/theme';
+import { useTranslation } from 'react-i18next'; // Import
 
 const { width } = Dimensions.get('window');
 
 export default function BmiScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const { t } = useTranslation(); // Hook
   const [loading, setLoading] = useState(false);
   
   // Données
@@ -114,10 +116,10 @@ export default function BmiScreen() {
   };
 
   const getInterpretation = (val: number) => {
-      if (val < 18.5) return { text: "Maigreur", color: theme.colors.primary }; // Bleu
-      if (val < 25) return { text: "Poids Normal", color: theme.colors.success }; // Vert
-      if (val < 30) return { text: "Surpoids", color: theme.colors.warning }; // Orange
-      return { text: "Obésité", color: theme.colors.danger }; // Rouge
+      if (val < 18.5) return { text: t('modules.bmi.underweight'), color: theme.colors.primary };
+      if (val < 25) return { text: t('modules.bmi.normal'), color: theme.colors.success }; 
+      if (val < 30) return { text: t('modules.bmi.overweight'), color: theme.colors.warning }; 
+      return { text: t('modules.bmi.obese'), color: theme.colors.danger }; 
   };
 
   // --- STYLES DYNAMIQUES ---
@@ -191,10 +193,11 @@ export default function BmiScreen() {
 
   const interpretation = bmi ? getInterpretation(bmi) : null;
   
-  // Position du curseur sur la jauge (min 15, max 35 pour l'échelle visuelle)
   const cursorPosition = bmi 
     ? Math.min(Math.max(((bmi - 15) / (35 - 15)) * 100, 0), 100) 
     : 0;
+
+  const statusColor = interpretation?.color || MODULE_COLOR;
 
   return (
     <View style={styles.container}>
@@ -211,21 +214,22 @@ export default function BmiScreen() {
             <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                 <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>INDICE MASSE CORPORELLE</Text>
+            <Text style={styles.headerTitle}>{t('modules.bmi.title')}</Text>
             <View style={{ width: 40 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             
             {/* RESULTAT */}
-            <View style={styles.resultCard}>
+            {/* CORRECTION ICI : Usage ternaire pour éviter le type '0 | object' */}
+            <View style={[styles.resultCard, bmi ? { borderColor: statusColor } : undefined]}>
                 {bmi ? (
                     <>
                         <Text style={styles.resultValue}>{bmi}</Text>
-                        <Text style={styles.resultLabel}>VOTRE IMC</Text>
+                        <Text style={styles.resultLabel}>{t('modules.bmi.result')}</Text>
                         
-                        <View style={[styles.interpBadge, { borderColor: interpretation?.color, backgroundColor: interpretation?.color + '15' }]}>
-                            <Text style={[styles.interpText, { color: interpretation?.color }]}>
+                        <View style={[styles.interpBadge, { borderColor: statusColor, backgroundColor: statusColor + '15' }]}>
+                            <Text style={[styles.interpText, { color: statusColor }]}>
                                 {interpretation?.text.toUpperCase()}
                             </Text>
                         </View>
@@ -241,7 +245,7 @@ export default function BmiScreen() {
                 ) : (
                     <>
                         <MaterialCommunityIcons name="human-handsup" size={48} color={MODULE_COLOR} style={{opacity: 0.5}} />
-                        <Text style={[styles.resultLabel, {marginTop:15}]}>CALCULATEUR DE SANTÉ</Text>
+                        <Text style={[styles.resultLabel, {marginTop:15}]}>{t('modules.bmi.calculate')}</Text>
                     </>
                 )}
             </View>
@@ -252,7 +256,7 @@ export default function BmiScreen() {
                 
                 <View style={styles.inputRow}>
                     <View style={[styles.inputGroup, {marginRight: 10}]}>
-                        <Text style={styles.inputLabel}>POIDS (KG)</Text>
+                        <Text style={styles.inputLabel}>{t('modules.bmi.input_weight')}</Text>
                         <TextInput 
                             style={styles.input} 
                             keyboardType="numeric" 
@@ -263,7 +267,7 @@ export default function BmiScreen() {
                         />
                     </View>
                     <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>TAILLE (CM)</Text>
+                        <Text style={styles.inputLabel}>{t('modules.bmi.input_height')}</Text>
                         <TextInput 
                             style={styles.input} 
                             keyboardType="numeric" 
@@ -277,7 +281,7 @@ export default function BmiScreen() {
 
                 <TouchableOpacity style={styles.calcBtn} onPress={() => calculate(undefined, undefined, true)} disabled={loading}>
                     <LinearGradient colors={BMI_GRADIENT} start={{x:0, y:0}} end={{x:1, y:0}} style={styles.btnGradient}>
-                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>CALCULER & SAUVEGARDER</Text>}
+                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>{t('modules.bmi.calculate')}</Text>}
                     </LinearGradient>
                 </TouchableOpacity>
             </View>

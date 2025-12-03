@@ -274,7 +274,7 @@ export default function Support() {
                       <MaterialCommunityIcons name="server-network" size={16} color={theme.colors.textSecondary} style={{marginRight: 15}} />
                       <MaterialCommunityIcons name="brain" size={16} color={theme.colors.textSecondary} />
                   </View>
-                  <Text style={styles.copyright}>© 2025 NEXUS INC. TOUS DROITS RÉSERVÉS.</Text>
+                  <Text style={styles.copyright}>© 2025 NEXUS INC / Powerd by Mazouz Web Solutions / TOUS DROITS RÉSERVÉS.</Text>
               </View>
           </View>
 
