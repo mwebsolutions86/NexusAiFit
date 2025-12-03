@@ -9,14 +9,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../lib/theme';
-import { useTranslation } from 'react-i18next'; // Import
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
 export default function NutritionScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { t } = useTranslation(); // Hook
+  const { t } = useTranslation(); // <--- HOOK
   const [loading, setLoading] = useState(false);
   const [activePlan, setActivePlan] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -40,25 +40,15 @@ export default function NutritionScreen() {
       setUserProfile(profile);
 
       const { data: plan } = await supabase.from('meal_plans').select('content').eq('user_id', session.user.id).eq('is_active', true).order('created_at', { ascending: false }).limit(1).single();
-
-      if (plan?.content) {
-        setActivePlan(plan.content);
-        loadDailyLog(session.user.id);
-      }
+      if (plan?.content) { setActivePlan(plan.content); loadDailyLog(session.user.id); }
     } catch (e) { console.log("Erreur chargement:", e); }
   };
 
   const loadDailyLog = async (userId: string) => {
       const today = new Date().toISOString().split('T')[0];
       const { data } = await supabase.from('nutrition_logs').select('meals_status, total_calories, total_protein').eq('user_id', userId).eq('log_date', today).maybeSingle();
-
-      if (data) {
-          setConsumedMeals(data.meals_status || {});
-          setDailyStats({ calories: data.total_calories || 0, protein: data.total_protein || 0 });
-      } else {
-          setConsumedMeals({});
-          setDailyStats({ calories: 0, protein: 0 });
-      }
+      if (data) { setConsumedMeals(data.meals_status || {}); setDailyStats({ calories: data.total_calories || 0, protein: data.total_protein || 0 }); } 
+      else { setConsumedMeals({}); setDailyStats({ calories: 0, protein: 0 }); }
   };
 
   const calculateDayTarget = (dayIndex: number) => {
@@ -72,7 +62,7 @@ export default function NutritionScreen() {
     const todayIdx = getTodayIndex();
     if (dayIndex !== todayIdx) {
         if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert(t('nutrition.alert_zone'), t('nutrition.alert_zone_msg')); // TRADUCTION
+        Alert.alert(t('nutrition.alert_zone'), t('nutrition.alert_zone_msg'));
         return;
     }
     if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -93,13 +83,7 @@ export default function NutritionScreen() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
         const today = new Date().toISOString().split('T')[0];
-        await supabase.from('nutrition_logs').upsert({
-            user_id: session.user.id,
-            log_date: today,
-            meals_status: newStatus,
-            total_calories: Math.max(0, newCalories),
-            total_protein: Math.max(0, newProtein)
-        }, { onConflict: 'user_id, log_date' });
+        await supabase.from('nutrition_logs').upsert({ user_id: session.user.id, log_date: today, meals_status: newStatus, total_calories: Math.max(0, newCalories), total_protein: Math.max(0, newProtein) }, { onConflict: 'user_id, log_date' });
     }
   };
 
@@ -113,15 +97,9 @@ export default function NutritionScreen() {
             const { data: { session } } = await supabase.auth.getSession();
             await supabase.from('meal_plans').update({ is_active: false }).eq('user_id', session!.user.id);
             const { error } = await supabase.from('meal_plans').insert({ user_id: session!.user.id, content: mealJson, title: mealJson.title || "Plan Nutrition IA", is_active: true });
-            if (!error) {
-                setActivePlan(mealJson);
-                setConsumedMeals({});
-                setDailyStats({ calories: 0, protein: 0 });
-                setPreferences('');
-                Alert.alert(t('nutrition.alert_title'), t('nutrition.alert_msg')); // TRADUCTION
-            }
+            if (!error) { setActivePlan(mealJson); setConsumedMeals({}); setDailyStats({ calories: 0, protein: 0 }); setPreferences(''); Alert.alert(t('nutrition.alert_title'), t('nutrition.alert_msg')); }
         }
-    } catch (e: any) { Alert.alert(t('nutrition.alert_error'), e.message); } finally { setLoading(false); } // TRADUCTION
+    } catch (e: any) { Alert.alert(t('nutrition.alert_error'), e.message); } finally { setLoading(false); }
   };
 
   const renderGenerator = () => (
@@ -131,21 +109,10 @@ export default function NutritionScreen() {
         <Text style={styles.inputDesc}>{t('nutrition.ia_desc')}</Text>
         <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>{t('nutrition.pref_label')}</Text>
-            <TextInput 
-                style={styles.textInput} 
-                placeholder={t('nutrition.pref_ph')} 
-                placeholderTextColor={theme.colors.textSecondary}
-                value={preferences}
-                onChangeText={setPreferences}
-                multiline
-            />
+            <TextInput style={styles.textInput} placeholder={t('nutrition.pref_ph')} placeholderTextColor={theme.colors.textSecondary} value={preferences} onChangeText={setPreferences} multiline />
         </View>
         <TouchableOpacity style={styles.genBtn} onPress={handleGenerate} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : (
-                <LinearGradient colors={[theme.colors.success, '#10b981']} start={{x:0, y:0}} end={{x:1, y:0}} style={styles.btnGradient}>
-                    <Text style={styles.genBtnText}>{t('nutrition.btn_generate')}</Text>
-                </LinearGradient>
-            )}
+            {loading ? <ActivityIndicator color="#fff" /> : <LinearGradient colors={[theme.colors.success, '#10b981']} start={{x:0, y:0}} end={{x:1, y:0}} style={styles.btnGradient}><Text style={styles.genBtnText}>{t('nutrition.btn_generate')}</Text></LinearGradient>}
         </TouchableOpacity>
     </View>
   );
@@ -165,90 +132,39 @@ export default function NutritionScreen() {
                 <View>
                     <Text style={styles.planTitle}>{activePlan.title}</Text>
                     <View style={{flexDirection:'row', gap:15, marginTop:5}}>
-                        <Text style={[styles.planSub, {color: theme.colors.textSecondary}]}>
-                            {t('nutrition.target')}: <Text style={{color: theme.colors.text, fontWeight:'900'}}>{dayTarget}</Text> KCAL
-                        </Text>
-                        <Text style={[styles.planSub, {color: theme.colors.success}]}>
-                            {t('nutrition.consumed')}: {dailyStats.calories}
-                        </Text>
+                        <Text style={[styles.planSub, {color: theme.colors.textSecondary}]}>{t('nutrition.target')}: <Text style={{color: theme.colors.text, fontWeight:'900'}}>{dayTarget}</Text> KCAL</Text>
+                        <Text style={[styles.planSub, {color: theme.colors.success}]}>{t('nutrition.consumed')}: {dailyStats.calories}</Text>
                     </View>
                 </View>
-                <TouchableOpacity onPress={handleGenerate} style={styles.regenBtnSmall}>
-                    <MaterialCommunityIcons name="refresh" size={20} color={theme.colors.text} />
-                </TouchableOpacity>
+                <TouchableOpacity onPress={handleGenerate} style={styles.regenBtnSmall}><MaterialCommunityIcons name="refresh" size={20} color={theme.colors.text} /></TouchableOpacity>
             </View>
-
-            <View style={styles.progressBarBg}>
-                <LinearGradient 
-                    colors={[theme.colors.success, '#34d399']} 
-                    start={{x:0, y:0}} end={{x:1, y:0}}
-                    style={[styles.progressBarFill, { width: `${progress * 100}%` }]} 
-                />
-            </View>
-
+            <View style={styles.progressBarBg}><LinearGradient colors={[theme.colors.success, '#34d399']} start={{x:0, y:0}} end={{x:1, y:0}} style={[styles.progressBarFill, { width: `${progress * 100}%` }]} /></View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 10, paddingVertical: 20}}>
                 {activePlan.days.map((d: any, i: number) => {
                     const isToday = i === todayIndex;
                     return (
-                    <TouchableOpacity 
-                        key={i} 
-                        style={[
-                            styles.dayTab, 
-                            activeTab === i && styles.dayTabActive,
-                            isToday && activeTab !== i && {borderColor: theme.colors.success, borderWidth: 1} 
-                        ]}
-                        onPress={() => {
-                            if (Platform.OS !== 'web') Haptics.selectionAsync();
-                            setActiveTab(i);
-                        }}
-                    >
-                        <Text style={[styles.dayText, activeTab === i && styles.dayTextActive]}>
-                            {d.day.slice(0,3).toUpperCase()}
-                            {isToday && " •"}
-                        </Text>
+                    <TouchableOpacity key={i} style={[styles.dayTab, activeTab === i && styles.dayTabActive, isToday && activeTab !== i && {borderColor: theme.colors.success, borderWidth: 1}]} onPress={() => { if (Platform.OS !== 'web') Haptics.selectionAsync(); setActiveTab(i); }}>
+                        <Text style={[styles.dayText, activeTab === i && styles.dayTextActive]}>{d.day.slice(0,3).toUpperCase()}{isToday && " •"}</Text>
                     </TouchableOpacity>
                 )})}
             </ScrollView>
-
             {day.meals.map((meal: any, index: number) => {
                 const isChecked = consumedMeals[`day_${safeIndex}_meal_${index}`];
                 return (
-                    <TouchableOpacity 
-                        key={index} 
-                        style={[
-                            styles.mealCard, 
-                            isChecked && styles.mealCardChecked,
-                            activeTab !== todayIndex && {opacity: 0.6} 
-                        ]}
-                        onPress={() => toggleMeal(safeIndex, index, meal.calories, meal.protein)}
-                        activeOpacity={0.8}
-                    >
+                    <TouchableOpacity key={index} style={[styles.mealCard, isChecked && styles.mealCardChecked]} onPress={() => toggleMeal(safeIndex, index, meal.calories, meal.protein)} activeOpacity={0.8}>
                         <View style={{flex:1}}>
                             <View style={styles.mealHeader}>
-                                <View style={styles.mealBadge}>
-                                    <Text style={styles.mealType}>{meal.type}</Text>
-                                </View>
-                                <View style={{flexDirection:'row', gap:8}}>
-                                     <Text style={styles.macroText}>🔥 {meal.calories}</Text>
-                                     <Text style={styles.macroText}>🥩 {meal.protein}</Text>
-                                </View>
+                                <View style={styles.mealBadge}><Text style={styles.mealType}>{meal.type}</Text></View>
+                                <View style={{flexDirection:'row', gap:8}}><Text style={styles.macroText}>🔥 {meal.calories}</Text><Text style={styles.macroText}>🥩 {meal.protein}</Text></View>
                             </View>
-                            <Text style={[styles.mealName, isChecked && {textDecorationLine: 'line-through', color: theme.colors.textSecondary}]}>
-                                {meal.name}
-                            </Text>
+                            <Text style={[styles.mealName, isChecked && {textDecorationLine: 'line-through', color: theme.colors.textSecondary}]}>{meal.name}</Text>
                             <Text style={styles.ingredients} numberOfLines={2}>🛒 {meal.ingredients}</Text>
                         </View>
-                        <View style={[styles.checkbox, isChecked && styles.checkboxActive]}>
-                            {isChecked && <Ionicons name="checkmark" size={16} color="#fff" />}
-                        </View>
+                        <View style={[styles.checkbox, isChecked && styles.checkboxActive]}>{isChecked && <Ionicons name="checkmark" size={16} color="#fff" />}</View>
                     </TouchableOpacity>
                 );
             })}
-            
-            <TouchableOpacity style={styles.regenBtn} onPress={handleGenerate}>
-                <Text style={styles.regenText}>{t('nutrition.btn_regen')}</Text>
-            </TouchableOpacity>
-            
+            <TouchableOpacity style={styles.regenBtn} onPress={handleGenerate}><Text style={styles.regenText}>{t('nutrition.btn_regen')}</Text></TouchableOpacity>
             <View style={{height:100}}/>
         </View>
     );
@@ -287,7 +203,7 @@ export default function NutritionScreen() {
     mealType: { color: theme.colors.success, fontSize: 9, fontWeight: 'bold', textTransform: 'uppercase' },
     macroText: { color: theme.colors.textSecondary, fontSize: 11, fontWeight: 'bold' },
     mealName: { color: theme.colors.text, fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
-    ingredients: { color: theme.colors.textSecondary, fontSize: 12, fontStyle: 'italic' },
+    ingredients: { color: theme.colors.textSecondary, fontSize: 11, fontStyle: 'italic' },
     checkbox: { width: 26, height: 26, borderRadius: 8, borderWidth: 2, borderColor: theme.colors.textSecondary, marginLeft: 15, justifyContent: 'center', alignItems: 'center' },
     checkboxActive: { backgroundColor: theme.colors.success, borderColor: theme.colors.success },
     regenBtn: { padding: 15, alignItems: 'center', marginTop: 20 },

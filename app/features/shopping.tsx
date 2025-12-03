@@ -73,7 +73,7 @@ export default function ShoppingScreen() {
   };
 
   const importFromMealPlan = async () => {
-      // CORRECTION : Usage direct de chaînes de caractères dans Alert
+      // Utilisation de chaînes simples pour Alert (pas de JSX)
       Alert.alert(
           t('modules.shopping.import_confirm_title'), 
           t('modules.shopping.import_confirm_msg'),
@@ -98,7 +98,13 @@ export default function ShoppingScreen() {
           
           remainingDays.forEach((day: any) => {
               day.meals?.forEach((meal: any) => {
-                  if (meal.ingredients) rawIngredients = [...rawIngredients, ...meal.ingredients];
+                  if (meal.ingredients) {
+                      if (typeof meal.ingredients === 'string') {
+                           rawIngredients = [...rawIngredients, ...meal.ingredients.split(',').map((s: string) => s.trim())];
+                      } else if (Array.isArray(meal.ingredients)) {
+                           rawIngredients = [...rawIngredients, ...meal.ingredients];
+                      }
+                  }
               });
           });
 
@@ -112,7 +118,7 @@ export default function ShoppingScreen() {
   };
 
   const clearList = async () => {
-      Alert.alert(t('modules.journal.delete_title'), t('modules.journal.delete_msg'), [{ text: t('modules.journal.btn_cancel'), style: "cancel" }, { text: t('modules.journal.btn_delete'), style: "destructive", onPress: async () => {
+      Alert.alert(t('modules.shopping.clear_confirm_title'), t('modules.shopping.clear_confirm_msg'), [{ text: t('modules.journal.btn_cancel'), style: "cancel" }, { text: t('modules.journal.btn_delete'), style: "destructive", onPress: async () => {
           const { data: { session } } = await supabase.auth.getSession();
           if(session) { await supabase.from('shopping_items').delete().eq('user_id', session.user.id); setItems([]); }
       }}]);
@@ -176,9 +182,35 @@ export default function ShoppingScreen() {
         </View>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
-            {activeItems.length > 0 && <View>{activeItems.map((item) => (<TouchableOpacity key={item.id} style={styles.itemCard} onPress={() => toggleItem(item.id, item.is_checked)}><View style={styles.checkbox} /><Text style={styles.itemText}>{item.item_name}</Text><TouchableOpacity onPress={() => deleteItem(item.id)} style={styles.deleteBtn}><MaterialCommunityIcons name="close" size={18} color={theme.colors.textSecondary} /></TouchableOpacity></TouchableOpacity>))}</View>}
-            {checkedItems.length > 0 && <View><Text style={styles.sectionTitle}>{t('modules.shopping.done_title')} ({checkedItems.length})</Text>{checkedItems.map((item) => (<TouchableOpacity key={item.id} style={[styles.itemCard, styles.itemChecked]} onPress={() => toggleItem(item.id, item.is_checked)}><View style={[styles.checkbox, styles.checkboxActive]}><MaterialCommunityIcons name="check" size={14} color="#fff" /></View><Text style={[styles.itemText, styles.itemTextChecked]}>{item.item_name}</Text><TouchableOpacity onPress={() => deleteItem(item.id)} style={styles.deleteBtn}><MaterialCommunityIcons name="close" size={18} color={theme.colors.textSecondary} /></TouchableOpacity></TouchableOpacity>))}</View>}
-            {items.length === 0 && !loading && <View style={styles.emptyState}><MaterialCommunityIcons name="cart-outline" size={64} color={theme.colors.textSecondary} /><Text style={styles.emptyText}>{t('modules.shopping.empty')}</Text></View>}
+            {activeItems.length > 0 && (
+                <View>{activeItems.map((item) => (
+                    <TouchableOpacity key={item.id} style={styles.itemCard} onPress={() => toggleItem(item.id, item.is_checked)}>
+                        <View style={styles.checkbox} />
+                        <Text style={styles.itemText}>{item.item_name}</Text>
+                        <TouchableOpacity onPress={() => deleteItem(item.id)} style={styles.deleteBtn}>
+                            <MaterialCommunityIcons name="close" size={18} color={theme.colors.textSecondary} />
+                        </TouchableOpacity>
+                    </TouchableOpacity>
+                ))}</View>
+            )}
+            {checkedItems.length > 0 && (
+                <View><Text style={styles.sectionTitle}>{t('modules.shopping.done_title')} ({checkedItems.length})</Text>
+                {checkedItems.map((item) => (
+                    <TouchableOpacity key={item.id} style={[styles.itemCard, styles.itemChecked]} onPress={() => toggleItem(item.id, item.is_checked)}>
+                        <View style={[styles.checkbox, styles.checkboxActive]}><MaterialCommunityIcons name="check" size={14} color="#fff" /></View>
+                        <Text style={[styles.itemText, styles.itemTextChecked]}>{item.item_name}</Text>
+                        <TouchableOpacity onPress={() => deleteItem(item.id)} style={styles.deleteBtn}>
+                            <MaterialCommunityIcons name="close" size={18} color={theme.colors.textSecondary} />
+                        </TouchableOpacity>
+                    </TouchableOpacity>
+                ))}</View>
+            )}
+            {items.length === 0 && !loading && (
+                <View style={styles.emptyState}>
+                    <MaterialCommunityIcons name="cart-outline" size={64} color={theme.colors.textSecondary} />
+                    <Text style={styles.emptyText}>{t('modules.shopping.empty')}</Text>
+                </View>
+            )}
         </ScrollView>
       </SafeAreaView>
     </View>
