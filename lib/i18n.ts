@@ -6,7 +6,52 @@ const resources = {
   fr: {
     translation: {
       // --- BASES ---
-      landing: { title: "TRANSFORMEZ VOTRE CORPS\nAVEC L'INTELLIGENCE ARTIFICIELLE", subtitle: "Coach Sportif • Nutritionniste • Bio-Tracker", start_btn: "COMMENCER L'AVENTURE", login_btn: "J'ai déjà un compte", legal: "En continuant, vous acceptez nos CGU et confirmez que Nexus ne remplace pas un médecin." },
+      landing: { 
+        title: "TRANSFORMEZ VOTRE CORPS\nAVEC L'INTELLIGENCE ARTIFICIELLE", 
+        subtitle: "Coach Sportif • Nutritionniste • Bio-Tracker", 
+        start_btn: "COMMENCER L'AVENTURE", 
+        login_btn: "J'ai déjà un compte", 
+        legal: "En continuant, vous acceptez nos CGU et confirmez que Nexus ne remplace pas un médecin.",
+        
+        // Slides Carrousel
+        slides: {
+            title1: "NE DEVINEZ PLUS.\nCALCULEZ.",
+            sub1: "L'effort est brut. La méthode est scientifique.",
+            title2: "VOTRE CORPS EST\nUN ALGORITHME",
+            sub2: "Bio-Tracking temps réel. Analyse Neural."
+        },
+        // Features
+        features: {
+            brain_title: "NEURAL COACH",
+            brain_text: "Une IA qui apprend de vos échecs pour garantir vos succès.",
+            bio_title: "BIO-HACKING",
+            bio_text: "Sommeil, Stress, VFC. Maîtrisez vos variables invisibles."
+        },
+        // Pricing
+        pricing: {
+            title: "OFFRES DISPONIBLES",
+            select_btn: "CHOISIR",
+            discovery: {
+                tier: "DÉCOUVERTE",
+                price: "GRATUIT",
+                f1: "Podomètre & Métriques",
+                f2: "Journal Hydratation",
+                f3: "Suivi Poids",
+                f4: "Chrono Simple",
+                f5: "Accès Limité"
+            },
+            premium: {
+                tier: "PREMIUM",
+                price: "5.99€",
+                period: "/mois",
+                f1: "Coach IA Illimité",
+                f2: "Programmes Sportifs IA",
+                f3: "Plan Nutritionnel IA",
+                f4: "Bio-Tracking Complet",
+                f5: "Outils Élite"
+            }
+        }
+      },
       auth: { welcome: "BIENVENUE", subtitle: "Connectez-vous au système", email_placeholder: "Adresse Email", password_placeholder: "Mot de passe", login_action: "SE CONNECTER", signup_action: "S'INSCRIRE", or: "OU", google: "CONTINUER AVEC GOOGLE", switch_to_signup: "Pas encore de compte ? Créer un profil", switch_to_login: "Déjà membre ? Se connecter", error_title: "Authentification échouée" },
       onboarding: { step1: "TON OBJECTIF ULTIME ?", step2: "TON NIVEAU ACTUEL ?", step3: "TON MATÉRIEL ?", next: "SUIVANT", finish: "TERMINER & GÉNÉRER", goals: { lose_weight: "Perte de Poids", muscle: "Prise de Masse", endurance: "Endurance & Cardio", strength: "Force Athlétique" }, levels: { beginner: "Débutant (0-1 an)", intermediate: "Intermédiaire (1-3 ans)", advanced: "Avancé (+3 ans)" }, equip: { gym: "Salle de Sport Complète", home: "Maison (Haltères/Elastiques)", bodyweight: "Poids du corps (Street)" } },
       tabs: { cockpit: "COCKPIT", sport: "SPORT", neural: "NEURAL", fuel: "FUEL", modules: "MODULES" },
@@ -111,7 +156,11 @@ const resources = {
   },
   en: {
     translation: {
-      landing: { title: "TRANSFORM YOUR BODY\nWITH AI", subtitle: "Coach • Nutritionist • Bio-Tracker", start_btn: "START JOURNEY", login_btn: "I have an account", legal: "By continuing, you accept TOS." },
+      landing: { title: "TRANSFORM YOUR BODY\nWITH AI", subtitle: "Sports Coach • Nutritionist • Bio-Tracker", start_btn: "START JOURNEY", login_btn: "I have an account", legal: "By continuing, you accept TOS.",
+          slides: { title1: "STOP GUESSING.\nCALCULATE.", sub1: "Effort is raw. Method is scientific.", title2: "YOUR BODY IS\nAN ALGORITHM", sub2: "Real-time Bio-Tracking. Neural Analysis." },
+          features: { brain_title: "NEURAL COACH", brain_text: "AI that learns from your failures.", bio_title: "BIO-HACKING", bio_text: "Sleep, Stress, HRV. Master invisible variables." },
+          pricing: { title: "AVAILABLE OFFERS", select_btn: "CHOOSE", discovery: { tier: "DISCOVERY", price: "FREE", f1: "Metrics & Pedometer", f2: "Hydration Log", f3: "Weight Tracking", f4: "Simple Timer", f5: "Limited Access" }, premium: { tier: "PREMIUM", price: "5.99€", period: "/month", f1: "Unlimited AI Coach", f2: "AI Workout Plans", f3: "AI Nutrition Plans", f4: "Full Bio-Tracking", f5: "Elite Tools" } }
+      },
       auth: { welcome: "WELCOME", subtitle: "Log in to system", email_placeholder: "Email", password_placeholder: "Password", login_action: "LOG IN", signup_action: "SIGN UP", or: "OR", google: "CONTINUE WITH GOOGLE", switch_to_signup: "No account? Create one", switch_to_login: "Member? Log in", error_title: "Auth failed" },
       onboarding: { step1: "ULTIMATE GOAL?", step2: "CURRENT LEVEL?", step3: "EQUIPMENT?", next: "NEXT", finish: "FINISH", goals: { lose_weight: "Weight Loss", muscle: "Muscle Gain", endurance: "Endurance", strength: "Power" }, levels: { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced" }, equip: { gym: "Gym", home: "Home", bodyweight: "Bodyweight" } },
       tabs: { cockpit: "COCKPIT", sport: "SPORT", neural: "NEURAL", fuel: "FUEL", modules: "MODULES" },
@@ -199,7 +248,11 @@ const resources = {
   },
   ar: {
     translation: {
-      landing: { title: "حول جسمك بالذكاء الاصطناعي", subtitle: "مدرب • تغذية • تتبع", start_btn: "ابدأ", login_btn: "دخول", legal: "بالمتابعة توافق على الشروط." },
+      landing: { title: "حول جسمك بالذكاء الاصطناعي", subtitle: "مدرب • تغذية • تتبع", start_btn: "ابدأ", login_btn: "دخول", legal: "بالمتابعة توافق على الشروط.",
+          slides: { title1: "لا تخمن.\nاحسب.", sub1: "الجهد خام. الطريقة علمية.", title2: "جسمك هو\nخوارزمية", sub2: "تتبع حيوي فوري. تحليل عصبي." },
+          features: { brain_title: "مدرب عصبي", brain_text: "ذكاء يتعلم من أخطائك.", bio_title: "اختراق بيولوجي", bio_text: "نوم، إجهاد، VFC." },
+          pricing: { title: "العروض المتاحة", select_btn: "اختر", discovery: { tier: "اكتشاف", price: "مجاني", f1: "مقاييس وخطوات", f2: "سجل ترطيب", f3: "تتبع وزن", f4: "مؤقت بسيط", f5: "وصول محدود" }, premium: { tier: "نخبة", price: "5.99€", period: "/شهر", f1: "مدرب ذكي غير محدود", f2: "برامج رياضية ذكية", f3: "خطط تغذية ذكية", f4: "تتبع حيوي كامل", f5: "أدوات النخبة" } }
+      },
       auth: { welcome: "مرحباً", subtitle: "تسجيل الدخول", email_placeholder: "البريد", password_placeholder: "كلمة المرور", login_action: "دخول", signup_action: "تسجيل", or: "أو", google: "جوجل", switch_to_signup: "حساب جديد", switch_to_login: "دخول", error_title: "خطأ" },
       onboarding: { step1: "الهدف؟", step2: "المستوى؟", step3: "المعدات؟", next: "التالي", finish: "إنهاء", goals: { lose_weight: "وزن", muscle: "عضلات", endurance: "تحمل", strength: "قوة" }, levels: { beginner: "مبتدئ", intermediate: "متوسط", advanced: "متقدم" }, equip: { gym: "جيم", home: "منزل", bodyweight: "وزن جسم" } },
       tabs: { cockpit: "الرئيسية", sport: "رياضة", neural: "عصبي", fuel: "وقود", modules: "وحدات" },
