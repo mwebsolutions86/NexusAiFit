@@ -10,7 +10,7 @@ import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import { useTheme } from '../../lib/theme';
 import { useTranslation } from 'react-i18next'; 
-import i18n from '../../lib/i18n'; // Import i18n
+import i18n from '../../lib/i18n';
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -20,8 +20,10 @@ export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  
+  // NOUVEAU : État pour la case à cocher
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
-  // --- TOGGLE LANGUE ---
   const toggleLanguage = () => {
       const current = i18n.language;
       const next = current === 'fr' ? 'en' : (current === 'en' ? 'ar' : 'fr');
@@ -48,6 +50,16 @@ export default function AuthScreen() {
 
   const handleAuth = async () => {
     if (!email || !password) return Alert.alert("Erreur", "Veuillez remplir tous les champs.");
+    
+    // NOUVEAU : Vérification des conditions lors de l'inscription
+    if (!isLogin && !termsAccepted) {
+        if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return Alert.alert(
+            "Conditions Requises", 
+            "Veuillez accepter les conditions d'utilisation et confirmer que NexusAiFit ne remplace pas un avis médical pour continuer."
+        );
+    }
+
     setLoading(true);
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
@@ -95,7 +107,6 @@ export default function AuthScreen() {
     auroraBg: { ...StyleSheet.absoluteFillObject, zIndex: -1 },
     blob: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.2 },
     
-    // BOUTON LANGUE FLOTTANT
     langBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
     langText: { color: '#fff', fontWeight: 'bold', fontSize: 10 },
 
@@ -107,7 +118,7 @@ export default function AuthScreen() {
     label: { color: theme.colors.primary, fontSize: 10, fontWeight: 'bold', marginBottom: 8, marginLeft: 4 },
     glassInput: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.glass, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 15, height: 55 },
     input: { flex: 1, color: theme.colors.text, marginLeft: 10, fontWeight: 'bold' },
-    authBtn: { borderRadius: 12, overflow: 'hidden', marginTop: 0 },
+    authBtn: { borderRadius: 12, overflow: 'hidden', marginTop: 10 },
     btnGradient: { height: 55, justifyContent: 'center', alignItems: 'center' },
     btnText: { color: '#fff', fontWeight: '900', letterSpacing: 1 },
     dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
@@ -117,6 +128,13 @@ export default function AuthScreen() {
     googleText: { color: theme.colors.text, fontWeight: 'bold' },
     switchBtn: { marginTop: 25, alignItems: 'center' },
     switchText: { color: theme.colors.textSecondary, fontSize: 12 },
+
+    // NOUVEAUX STYLES POUR LA CASE À COCHER
+    termsContainer: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20, marginTop: 5 },
+    checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: theme.colors.textSecondary, marginRight: 10, justifyContent: 'center', alignItems: 'center', marginTop: 2 },
+    checkboxActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+    termsText: { flex: 1, color: theme.colors.textSecondary, fontSize: 11, lineHeight: 16 },
+    linkText: { color: theme.colors.primary, fontWeight: 'bold' }
   });
 
   return (
@@ -130,7 +148,6 @@ export default function AuthScreen() {
         </View>
       )}
 
-      {/* BOUTON LANGUE */}
       <TouchableOpacity style={styles.langBtn} onPress={toggleLanguage}>
           <Text style={styles.langText}>{i18n.language.toUpperCase()}</Text>
       </TouchableOpacity>
@@ -176,6 +193,25 @@ export default function AuthScreen() {
                     </View>
                 </View>
 
+                {/* NOUVEAU : CASE À COCHER (Visible uniquement lors de l'inscription) */}
+                {!isLogin && (
+                    <TouchableOpacity 
+                        style={styles.termsContainer} 
+                        onPress={() => {
+                            if (Platform.OS !== 'web') Haptics.selectionAsync();
+                            setTermsAccepted(!termsAccepted);
+                        }}
+                        activeOpacity={0.8}
+                    >
+                        <View style={[styles.checkbox, termsAccepted && styles.checkboxActive]}>
+                            {termsAccepted && <MaterialCommunityIcons name="check" size={14} color="#fff" />}
+                        </View>
+                        <Text style={styles.termsText}>
+                            J'accepte les <Text style={styles.linkText}>CGU</Text> et je reconnais que NexusAiFit ne remplace pas un avis médical.
+                        </Text>
+                    </TouchableOpacity>
+                )}
+
                 <TouchableOpacity style={styles.authBtn} onPress={handleAuth} disabled={loading}>
                     <LinearGradient colors={[theme.colors.primary, theme.colors.secondary]} start={{x:0, y:0}} end={{x:1, y:0}} style={styles.btnGradient}>
                         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>{isLogin ? t('auth.login_action') : t('auth.signup_action')}</Text>}
@@ -193,7 +229,10 @@ export default function AuthScreen() {
                     <Text style={styles.googleText}>{t('auth.google')}</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.switchBtn}>
+                <TouchableOpacity onPress={() => {
+                    setIsLogin(!isLogin);
+                    setTermsAccepted(false); // Reset checkbox on switch
+                }} style={styles.switchBtn}>
                     <Text style={styles.switchText}>
                         {isLogin ? t('auth.switch_to_signup') : t('auth.switch_to_login')}
                     </Text>
