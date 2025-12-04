@@ -1,6 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
+import { getLocales } from 'expo-localization';
 
 const resources = {
   fr: {
@@ -84,8 +85,49 @@ const resources = {
         alert_zone_msg: "Concentrez-vous sur le plan d'aujourd'hui." 
       },
       // --- SYSTÈMES (Menu) ---
-      systems: { title: "SYSTÈMES", subtitle: "Centre de Commande", search_ph: "Rechercher un protocole...", locked_alert: "MODULE PREMIUM", locked_msg: "Passez à la version Elite pour débloquer", btn_unlock: "DÉBLOQUER", soon_title: "Bientôt", soon_msg: "Module en cours de développement.", categories: { bio: "BIO-TRACKING", perf: "PERFORMANCE", nutri: "NUTRITION", recup: "RÉCUPÉRATION & BIO-HACKING" }, modules: { body_fat: "Masse Grasse", water: "Hydratation", tdee: "Métabolisme", bmi: "Analyse IMC", sleep: "Analyse Sommeil", stress: "Niveau Stress", heart: "Cardio Fréq.", body: "Body Battery", '1rm': "Calculateur 1RM", timer: "Chrono Tactique", workout_log: "Historique Séances", reflex: "Test Réflexes", vision: "Vision Focus", posture: "Analyse Posture", macros: "Calculateur Macros", shopping: "Liste Courses", supps: "Stack Suppléments", fasting: "Jeûne Intermit.", meal_prep: "Chef Meal Prep", breath: "Respiration", stretching: "Routine Souplesse", mood: "État Neural", meditation: "Méditation Zen", journaling: "Journal de Bord", cold: "Suivi Froid", nootropics: "Guide Nootropiques", env: "Scanner Environ.", hrv: "Optimisation VFC", discharge: "Neuro-Décharge" } },
-      
+      systems: {
+        title: "Systèmes",
+        subtitle: "Optimisez chaque aspect de votre biologie.",
+        categories: {
+          metabolism: "Bio-Métabolisme",
+          performance: "Performance Physique",
+          mental: "Neuro & Récupération",
+          logistics: "Logistique"
+        },
+        subtitles: {
+          metabolism: "Nutrition, Hydratation & Composition",
+          performance: "Force, Endurance & Outils",
+          mental: "Sommeil, Stress & Bio-Hacking",
+          logistics: "Organisation & Achats"
+        },
+        modules: {
+          nutrition: "Plan Nutrition",
+          macros: "Macros",
+          water: "Hydratation",
+          bodyfat: "Body Fat %",
+          bmi: "IMC / BMI",
+          tdee: "Dépense (TDEE)",
+          fasting: "Jeûne",
+          workout_log: "Journal Sport",
+          rm1: "Calculateur 1RM",
+          timer: "Chrono / Tabata",
+          posture: "Posture AI",
+          reflex: "Réflexes",
+          vision: "Vision",
+          sleep: "Sommeil",
+          stress: "Gestion Stress",
+          meditation: "Méditation",
+          breath: "Respiration",
+          cold: "Cold Exposure",
+          nootropics: "Nootropiques",
+          journal: "Journal",
+          shopping: "Courses",
+          meal_prep: "Meal Prep",
+          env: "Environnement",
+          hrv: "VFC / HRV",
+          discharge: "Décharge"
+        }
+      },
       // --- ABONNEMENT ---
       subscription: { badge: "NEXUS ELITE", status_badge: "STATUT : MEMBRE ELITE", title_free: "DÉPASSEZ VOS LIMITES", title_pro: "VOTRE ABONNEMENT", subtitle: "Débloquez l'intelligence artificielle complète pour une transformation physique accélérée.", active_title: "Abonnement Actif", active_renewal: "Prochain renouvellement : 01/01/2026", manage_btn: "GÉRER / ANNULER", manage_info: "Vous allez être redirigé vers les réglages de votre Store pour gérer l'abonnement.", features: { coach: "Coach IA Illimité (Chat)", plans: "Plans Nutrition & Sport 100% Perso", bio: "Analyse Biométrique (VFC, Sommeil)", recipes: "Recettes & Listes de Courses", support: "Support Prioritaire" }, price_month: "/ mois", btn_start: "COMMENCER L'ESSAI", btn_restore: "Restaurer les achats", legal_terms: "Conditions Générales", legal_privacy: "Confidentialité", alert_pay_title: "Paiement (Simulation)", alert_pay_msg: "En production, ceci ouvrira Apple Pay / Google Pay via RevenueCat.", alert_restore: "Restauration", alert_restore_msg: "Recherche d'abonnements existants..." },
       
@@ -213,8 +255,50 @@ const resources = {
       timer: { title: "TACTICAL TIMER", mode_rest: "REST", mode_tabata: "TABATA", start: "START", stop: "STOP", reset: "RESET", rounds: "ROUNDS", work: "WORK", rest: "REST" },
       library: { title: "NEXUS LIBRARY", available: "MOVEMENTS", search_ph: "Search...", filters: { all: "All", chest: "Chest", back: "Back", legs: "Legs", shoulders: "Shoulders", arms: "Arms", abs: "Abs", cardio: "Cardio" }, protocol: "PROTOCOL:", btn_video: "VIDEO", btn_add: "ADD", empty_search: "No results" },
       history: { title: "WORKOUT LOGS", stats_total: "TOTAL SESSIONS", stats_valid: "VALIDATED EXOS", timeline: "TIMELINE", session_active: "Active", session_rest: "Rest", completed_ex: "completed", empty: "No logs." },
-      systems: { title: "SYSTEMS", subtitle: "Command Center", search_ph: "Search protocol...", locked_alert: "PREMIUM MODULE", locked_msg: "Upgrade to unlock", btn_unlock: "UNLOCK", soon_title: "Soon", soon_msg: "Under development.", categories: { bio: "BIO-TRACKING", perf: "PERFORMANCE", nutri: "NUTRITION", recup: "RECOVERY" }, modules: { body_fat: "Body Fat", water: "Hydration", tdee: "Metabolism", bmi: "BMI", sleep: "Sleep", stress: "Stress", heart: "Heart Rate", body: "Body Battery", '1rm': "1RM Calc", timer: "Timer", workout_log: "History", reflex: "Reflex", vision: "Vision", posture: "Posture", macros: "Macros", shopping: "Shopping", supps: "Supplements", fasting: "Fasting", meal_prep: "Meal Prep", breath: "Breathing", stretching: "Stretching", mood: "Mood", meditation: "Meditation", journaling: "Journaling", cold: "Cold Exp", nootropics: "Nootropics", env: "Environment", hrv: "HRV", discharge: "Discharge" } },
-      
+      systems: {
+        title: "Systems",
+        subtitle: "Optimize every aspect of your biology.",
+        categories: {
+          metabolism: "Bio-Metabolism",
+          performance: "Physical Performance",
+          mental: "Neuro & Recovery",
+          logistics: "Logistics"
+        },
+        subtitles: {
+          metabolism: "Nutrition, Hydration & Composition",
+          performance: "Strength, Endurance & Tools",
+          mental: "Sleep, Stress & Bio-Hacking",
+          logistics: "Organization & Shopping"
+        },
+        modules: {
+          nutrition: "Nutrition Plan",
+          macros: "Macros",
+          water: "Hydration",
+          bodyfat: "Body Fat %",
+          bmi: "BMI",
+          tdee: "TDEE Burn",
+          fasting: "Fasting",
+          workout_log: "Workout Log",
+          rm1: "1RM Calc",
+          timer: "Timer / Tabata",
+          posture: "Posture AI",
+          reflex: "Reflexes",
+          vision: "Vision",
+          sleep: "Sleep",
+          stress: "Stress Mgmt",
+          meditation: "Meditation",
+          breath: "Breathing",
+          cold: "Cold Exposure",
+          nootropics: "Nootropics",
+          journal: "Journal",
+          shopping: "Groceries",
+          meal_prep: "Meal Prep",
+          env: "Environment",
+          hrv: "HRV",
+          discharge: "Discharge"
+        }
+      },
+
       modules: {
         water: { title: "HYDRATION", goal: "GOAL", current: "CURRENT", add: "ADD 250ML", history: "TODAY'S HISTORY", unit: "L" },
         shopping: { title: "SHOPPING LIST", add_ph: "Add item...", empty: "List empty.", empty_sub: "Add items manually or import from plan.", import_btn: "IMPORT PLAN (Remaining)", clear_btn: "CLEAR", add_btn: "ADD", done_title: "DONE", import_success: "items added.", import_empty: "No ingredients found.", import_confirm_title: "Import?", import_confirm_msg: "Adds ingredients for the rest of the week.", clear_confirm_title: "Clear?", clear_confirm_msg: "Delete everything?" },
@@ -276,7 +360,50 @@ const resources = {
         alert_zone: "منطقة خاطئة", 
         alert_zone_msg: "ركز على خطة اليوم." 
       },
-      systems: { title: "الأنظمة", subtitle: "مركز القيادة", search_ph: "بحث عن بروتوكول...", locked_alert: "وحدة مميزة", locked_msg: "رقي للعضوية لفتح الوحدة", btn_unlock: "فتح", soon_title: "قريباً", soon_msg: "قيد التطوير.", categories: { bio: "التتبع الحيوي", perf: "الأداء", nutri: "التغذية", recup: "الاستشفاء" }, modules: { body_fat: "نسبة الدهون", water: "الترطيب", tdee: "الأيض", bmi: "مؤشر الكتلة", sleep: "النوم", stress: "الإجهاد", heart: "القلب", body: "طاقة الجسم", '1rm': "حاسبة 1RM", timer: "المؤقت", workout_log: "سجل التمارين", reflex: "رد الفعل", vision: "الرؤية", posture: "الوضعية", macros: "الماكروز", shopping: "التسوق", supps: "المكملات", fasting: "الصيام", meal_prep: "تحضير الوجبات", breath: "التنفس", stretching: "الإطالة", mood: "المزاج", meditation: "التأمل", journaling: "الدوين", cold: "التعرض للبرد", nootropics: "المنشطات الذهنية", env: "البيئة", hrv: "تقلب القلب", discharge: "تفريغ عصبي" } },
+      systems: {
+        title: "الأنظمة",
+        subtitle: "حسن كل جانب من جوانب بيولوجيتك.",
+        categories: {
+          metabolism: "التمثيل الغذائي",
+          performance: "الأداء البدني",
+          mental: "الذهن والتعافي",
+          logistics: "اللوجستيات"
+        },
+        subtitles: {
+          metabolism: "تغذية، ترطيب وتكوين",
+          performance: "قوة، تحمل وأدوات",
+          mental: "نوم، إجهاد وتحسين حيوي",
+          logistics: "تنظيم ومشتريات"
+        },
+        modules: {
+          nutrition: "خطة التغذية",
+          macros: "الماكروز",
+          water: "الترطيب",
+          bodyfat: "نسبة الدهون",
+          bmi: "مؤشر الكتلة (BMI)",
+          tdee: "حرق السعرات (TDEE)",
+          fasting: "الصيام",
+          workout_log: "سجل التمارين",
+          rm1: "حاسبة 1RM",
+          timer: "مؤقت / تاباتا",
+          posture: "تحليل الوضعية",
+          reflex: "رد الفعل",
+          vision: "التركيز البصري",
+          sleep: "النوم",
+          stress: "إدارة التوتر",
+          meditation: "التأمل",
+          breath: "التنفس",
+          cold: "التعرض للبرد",
+          nootropics: "المنشطات الذهنية",
+          journal: "اليوميات",
+          shopping: "تسوّق",
+          meal_prep: "تجهيز الوجبات",
+          env: "البيئة",
+          hrv: "تقلب القلب (HRV)",
+          discharge: "تفريغ عصبي"
+        }
+      },
+
       subscription: { badge: "نيكسس إيليت", status_badge: "الحالة: عضو نخبة", title_free: "تجاوز الحدود", title_pro: "اشتراكك", subtitle: "افتح ذكاءً اصطناعياً كاملاً لتحول جسدي متسارع.", active_title: "اشتراك نشط", active_renewal: "التجديد القادم: 01/01/2026", manage_btn: "إدارة / إلغاء", manage_info: "سيتم تحويلك لإعدادات المتجر.", features: { coach: "مدرب ذكي غير محدود", plans: "خطط مخصصة 100%", bio: "تحليل حيوي", recipes: "وصفات وقوائم", support: "دعم ذو أولوية" }, price_month: "/ شهر", btn_start: "ابدأ التجربة", btn_restore: "استعادة المشتريات", legal_terms: "الشروط", legal_privacy: "الخصوصية", alert_pay_title: "دفع (محاكاة)", alert_pay_msg: "في الإنتاج عبر RevenueCat.", alert_restore: "استعادة", alert_restore_msg: "جاري البحث..." },
       workout_tracker: { 
         title: "متتبع التمارين", 
@@ -350,10 +477,14 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: deviceLanguage, 
+    lng: getLocales()[0]?.languageCode ?? 'fr', // Valeur temporaire
     fallbackLng: 'en',
-    interpolation: { escapeValue: false },
-    react: { useSuspense: false }
+    interpolation: {
+      escapeValue: false,
+    },
+    react: {
+      useSuspense: false,
+    },
   });
 
 export default i18n;

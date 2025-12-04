@@ -11,6 +11,7 @@ import { useTheme } from '../lib/theme';
 import { useTranslation } from 'react-i18next';
 import i18n from '../lib/i18n';
 
+
 const { width, height } = Dimensions.get('window');
 
 const FeatureBlock = ({ icon, title, text }: any) => (
@@ -108,7 +109,6 @@ export default function LandingScreen() {
       const next = current === 'fr' ? 'en' : (current === 'en' ? 'ar' : 'fr');
       i18n.changeLanguage(next);
   };
-
   const renderItem = ({ item, index }: any) => {
       const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
       const translateX = scrollX.interpolate({

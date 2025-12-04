@@ -11,6 +11,7 @@ import { useTheme } from '../lib/theme';
 import { useTranslation } from 'react-i18next';
 import i18n from '../lib/i18n'; // Import direct de l'instance i18n
 
+
 interface EditData {
   full_name: string;
   age: string;
@@ -102,7 +103,6 @@ export default function ProfileScreen() {
   const toggleLanguage = () => {
       if (Platform.OS !== 'web') Haptics.selectionAsync();
       const current = i18n.language;
-      // Cycle: FR -> EN -> AR -> FR
       const next = current === 'fr' ? 'en' : (current === 'en' ? 'ar' : 'fr');
       i18n.changeLanguage(next);
   };
