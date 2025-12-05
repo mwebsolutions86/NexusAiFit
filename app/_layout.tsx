@@ -1,61 +1,73 @@
 import '../lib/i18n'; 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { ThemeProvider } from '../lib/theme';
 import * as Linking from 'expo-linking';
 
+// --- NOUVEAU : Import React Query ---
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '../lib/react-query';
+
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Initialisation minimale pour l'Auth Google
+    // Initialisation pour l'Auth Google (Deep Linking)
     const handleDeepLink = async (url: string) => {
       if (url && (url.includes('access_token') || url.includes('refresh_token'))) {
-        // La session sera gérée par Supabase automatiquement ou via le AuthScreen
+        // La session est gérée par Supabase, on laisse faire le flow naturel
       }
     };
-    Linking.getInitialURL().then((url) => { if (url) handleDeepLink(url); });
+
+    Linking.getInitialURL().then((url) => { 
+      if (url) handleDeepLink(url); 
+    });
     
-    // On laisse l'app se charger
+    // Simulation de chargement initial rapide
     setIsReady(true);
   }, []);
 
   if (!isReady) {
       return (
           <View style={{flex:1, backgroundColor:'#000', justifyContent:'center', alignItems:'center'}}>
-              <ActivityIndicator color="#00f3ff" />
+              <ActivityIndicator color="#00f3ff" size="large" />
           </View>
       );
   }
 
   return (
-    <ThemeProvider>
-      <View style={{ flex: 1, backgroundColor: '#000' }}>
-        <StatusBar style="light" />
-        
-        {/* STACK : Empêche la barre de navigation de s'afficher sur la Landing Page */}
-        <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+    // 1. ENVELOPPE GLOBALE : Moteur de Données
+    <QueryClientProvider client={queryClient}>
+      
+      {/* 2. ENVELOPPE THEME : Design System */}
+      <ThemeProvider>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <StatusBar style="light" />
           
-          {/* 1. Landing Page */}
-          <Stack.Screen name="index" /> 
-          
-          {/* 2. Auth (Le dossier app/auth/index.tsx) */}
-          <Stack.Screen name="auth/index" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="auth/callback" />
-          
-          {/* 3. Onboarding */}
-          <Stack.Screen name="onboarding" />
+          {/* 3. NAVIGATION : Routes */}
+          <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+            
+            {/* Landing Page */}
+            <Stack.Screen name="index" /> 
+            
+            {/* Auth */}
+            <Stack.Screen name="auth/index" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="auth/callback" />
+            
+            {/* Onboarding */}
+            <Stack.Screen name="onboarding" />
 
-          {/* 4. Dashboard (Le dossier app/(tabs)/) -> C'est LUI qui a la barre de nav */}
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            {/* Dashboard & Tabs (Le cœur de l'app) */}
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-          {/* 5. Fallback */}
-          <Stack.Screen name="+not-found" />
-          
-        </Stack>
-      </View>
-    </ThemeProvider>
+            {/* Fallback */}
+            <Stack.Screen name="+not-found" />
+            
+          </Stack>
+        </View>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }

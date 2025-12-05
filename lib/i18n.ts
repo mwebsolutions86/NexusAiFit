@@ -54,7 +54,50 @@ const resources = {
         }
       },
       auth: { welcome: "BIENVENUE", subtitle: "Connectez-vous au système", email_placeholder: "Adresse Email", password_placeholder: "Mot de passe", login_action: "SE CONNECTER", signup_action: "S'INSCRIRE", or: "OU", google: "CONTINUER AVEC GOOGLE", switch_to_signup: "Pas encore de compte ? Créer un profil", switch_to_login: "Déjà membre ? Se connecter", error_title: "Authentification échouée" },
-      onboarding: { step1: "TON OBJECTIF ULTIME ?", step2: "TON NIVEAU ACTUEL ?", step3: "TON MATÉRIEL ?", next: "SUIVANT", finish: "TERMINER & GÉNÉRER", goals: { lose_weight: "Perte de Poids", muscle: "Prise de Masse", endurance: "Endurance & Cardio", strength: "Force Athlétique" }, levels: { beginner: "Débutant (0-1 an)", intermediate: "Intermédiaire (1-3 ans)", advanced: "Avancé (+3 ans)" }, equip: { gym: "Salle de Sport Complète", home: "Maison (Haltères/Elastiques)", bodyweight: "Poids du corps (Street)" } },
+      onboarding: {
+        error_no_session: "Pas de session active",
+        step1_title: "PROFIL BIOLOGIQUE",
+        step1_sub: "Ces données permettent de calculer ton métabolisme de base.",
+        ph_fullname: "Nom complet",
+        ph_age: "Age",
+        ph_weight: "Poids (kg)",
+        ph_height: "Taille (cm)",
+        step2_title: "LOCALISATION & CULTURE",
+        location_info: "Nous utilisons ta région pour adapter les plans nutritionnels à ta culture locale et aux produits disponibles près de chez toi.",
+        label_country: "PAYS",
+        ph_country: "Ex: Maroc, France, Canada...",
+        label_city: "VILLE (OPTIONNEL)",
+        ph_city: "Ex: Casablanca, Paris...",
+        step3_title: "OBJECTIFS & NIVEAU",
+        label_level: "TON NIVEAU ACTUEL",
+        label_goal: "TON OBJECTIF PRINCIPAL",
+        step4_title: "CONTEXTE",
+        label_freq: "FRÉQUENCE D'ENTRAÎNEMENT (JOURS/SEMAINE)",
+        label_equip: "ÉQUIPEMENT DISPONIBLE",
+        ph_equip: "Ex: Salle complète, Haltères maison...",
+        label_diet: "RESTRICTIONS ALIMENTAIRES",
+        ph_diet: "Ex: Végétarien, Sans Gluten...",
+        btn_finish: "TERMINER L'INSTALLATION",
+        btn_next: "SUIVANT"
+      },
+      gender: {
+        homme: "HOMME",
+        femme: "FEMME"
+      },
+      level: {
+        débutant: "Débutant",
+        intermédiaire: "Intermédiaire",
+        avancé: "Avancé",
+        athlète: "Athlète"
+      },
+      goal: {
+        perte_de_poids: "Perte de poids",
+        prise_de_masse: "Prise de masse",
+        endurance: "Endurance",
+        flexibilité: "Flexibilité",
+        santé_globale: "Santé Globale"
+      },
+      
       tabs: { cockpit: "COCKPIT", sport: "SPORT", neural: "NEURAL", fuel: "FUEL", modules: "MODULES" },
       
       // --- DASHBOARD ---
@@ -204,8 +247,49 @@ const resources = {
           pricing: { title: "AVAILABLE OFFERS", select_btn: "CHOOSE", discovery: { tier: "DISCOVERY", price: "FREE", f1: "Metrics & Pedometer", f2: "Hydration Log", f3: "Weight Tracking", f4: "Simple Timer", f5: "Limited Access" }, premium: { tier: "PREMIUM", price: "5.99€", period: "/month", f1: "Unlimited AI Coach", f2: "AI Workout Plans", f3: "AI Nutrition Plans", f4: "Full Bio-Tracking", f5: "Elite Tools" } }
       },
       auth: { welcome: "WELCOME", subtitle: "Log in to system", email_placeholder: "Email", password_placeholder: "Password", login_action: "LOG IN", signup_action: "SIGN UP", or: "OR", google: "CONTINUE WITH GOOGLE", switch_to_signup: "No account? Create one", switch_to_login: "Member? Log in", error_title: "Auth failed" },
-      onboarding: { step1: "ULTIMATE GOAL?", step2: "CURRENT LEVEL?", step3: "EQUIPMENT?", next: "NEXT", finish: "FINISH", goals: { lose_weight: "Weight Loss", muscle: "Muscle Gain", endurance: "Endurance", strength: "Power" }, levels: { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced" }, equip: { gym: "Gym", home: "Home", bodyweight: "Bodyweight" } },
-      tabs: { cockpit: "COCKPIT", sport: "SPORT", neural: "NEURAL", fuel: "FUEL", modules: "MODULES" },
+      onboarding: {
+        error_no_session: "No active session",
+        step1_title: "BIOLOGICAL PROFILE",
+        step1_sub: "This data helps calculate your basal metabolism.",
+        ph_fullname: "Full Name",
+        ph_age: "Age",
+        ph_weight: "Weight (kg)",
+        ph_height: "Height (cm)",
+        step2_title: "LOCATION & CULTURE",
+        location_info: "We use your region to adapt nutritional plans to your local culture and available products.",
+        label_country: "COUNTRY",
+        ph_country: "Ex: Morocco, France, Canada...",
+        label_city: "CITY (OPTIONAL)",
+        ph_city: "Ex: Casablanca, Paris...",
+        step3_title: "GOALS & LEVEL",
+        label_level: "CURRENT LEVEL",
+        label_goal: "MAIN GOAL",
+        step4_title: "CONTEXT",
+        label_freq: "TRAINING FREQUENCY (DAYS/WEEK)",
+        label_equip: "AVAILABLE EQUIPMENT",
+        ph_equip: "Ex: Full gym, Home dumbbells...",
+        label_diet: "DIETARY RESTRICTIONS",
+        ph_diet: "Ex: Vegetarian, Gluten Free...",
+        btn_finish: "COMPLETE SETUP",
+        btn_next: "NEXT"
+      },
+      gender: {
+        homme: "MALE",
+        femme: "FEMALE"
+      },
+      level: {
+        débutant: "Beginner",
+        intermédiaire: "Intermediate",
+        avancé: "Advanced",
+        athlète: "Athlete"
+      },
+      goal: {
+        perte_de_poids: "Weight Loss",
+        prise_de_masse: "Muscle Gain",
+        endurance: "Endurance",
+        flexibilité: "Flexibility",
+        santé_globale: "Overall Health"
+      },tabs: { cockpit: "COCKPIT", sport: "SPORT", neural: "NEURAL", fuel: "FUEL", modules: "MODULES" },
       dashboard: { greeting: "HELLO", stats_nutri: "NUTRITION", stats_work: "WORKOUT", unit_sessions: "SESSIONS (7D)", unit_kcal: "KCAL / DAY", section_active: "ACTIVE", section_explore: "EXPLORE", active_badge: "ACTIVE PLAN", no_plan_title: "No plan", no_plan_desc: "Create your plan with AI.", card_focus: "Focus", card_sess: "sessions", mod_nutri: "Nutrition", mod_nutri_sub: "Active plan", mod_gen: "Generate", mod_lib: "Library", mod_lib_sub: "+200 exercises", mod_hist: "History", mod_hist_sub: "Progress", mod_coach: "Neural Coach", mod_coach_sub: "AI Chat" },
       profile: { language: "Language", title: "PROFILE", default_name: "INITIATE", section_info: "PERSONAL INFO", label_name: "Full Name", ph_name: "Name", label_age: "AGE", ph_age: "Age", label_weight: "WEIGHT (KG)", label_height: "HEIGHT (CM)", label_goal: "GOAL", ph_goal: "Goal...", label_level: "LEVEL", ph_level: "Level...", section_config: "SPORT CONFIG", label_exp: "EXPERIENCE", label_equip: "EQUIPMENT", label_freq: "SESSIONS/WEEK", section_physique: "BODY & HEALTH", section_stats: "STATS", stat_streak: "Streak", stat_points: "Points", stat_level: "Level", stat_weight: "Current Kg", section_sub: "SUBSCRIPTION", badge_active: "ACTIVE", sub_renewal: "Renewal:", sub_auto: "Auto-renewal", member_elite: "ELITE MEMBER", member_standard: "STANDARD MEMBER", sub_free: "FREE", sub_desc_free: "Limited access.", sub_desc_premium: "Unlimited access", sub_action: "Upgrade", sub_manage: "Manage", btn_save: "SAVE", btn_saving: "SAVING...", section_settings: "SETTINGS", theme: "Dark/Light Mode", support: "Support", legal: "Legal", logout: "Logout", section_danger: "DANGER ZONE", deactivate: "Deactivate", delete: "Delete", alerts: { welcome: "Welcome", welcome_msg: "Premium unlocked!", sub_downgrade: "Free mode", error: "Error", error_plan: "Plan error", confirm_logout: "Logout?", success: "Success", saved: "Saved" }, footer: { version: "v1.0", system: "BIO MANAGEMENT SYSTEM", copyright: "© 2025 NEXUS" } },
       coach: { intro: "NEXUS System Online. Ready to optimize performance. What is your mission?", locked_title: "RESTRICTED ACCESS", locked_desc: "Neural Coach reserved for Elite members.", btn_unlock: "ACTIVATE ELITE ACCESS", placeholder: "Ask a question...", error_network: "Network error.", error_server: "Systems not responding." },
@@ -338,7 +422,49 @@ const resources = {
           pricing: { title: "العروض المتاحة", select_btn: "اختر", discovery: { tier: "اكتشاف", price: "مجاني", f1: "مقاييس وخطوات", f2: "سجل ترطيب", f3: "تتبع وزن", f4: "مؤقت بسيط", f5: "وصول محدود" }, premium: { tier: "نخبة", price: "5.99€", period: "/شهر", f1: "مدرب ذكي غير محدود", f2: "برامج رياضية ذكية", f3: "خطط تغذية ذكية", f4: "تتبع حيوي كامل", f5: "أدوات النخبة" } }
       },
       auth: { welcome: "مرحباً", subtitle: "تسجيل الدخول", email_placeholder: "البريد", password_placeholder: "كلمة المرور", login_action: "دخول", signup_action: "تسجيل", or: "أو", google: "جوجل", switch_to_signup: "حساب جديد", switch_to_login: "دخول", error_title: "خطأ" },
-      onboarding: { step1: "الهدف؟", step2: "المستوى؟", step3: "المعدات؟", next: "التالي", finish: "إنهاء", goals: { lose_weight: "وزن", muscle: "عضلات", endurance: "تحمل", strength: "قوة" }, levels: { beginner: "مبتدئ", intermediate: "متوسط", advanced: "متقدم" }, equip: { gym: "جيم", home: "منزل", bodyweight: "وزن جسم" } },
+      onboarding: {
+        error_no_session: "لا توجد جلسة نشطة",
+        step1_title: "الملف البيولوجي",
+        step1_sub: "تساعد هذه البيانات في حساب معدل الأيض الأساسي الخاص بك.",
+        ph_fullname: "الاسم الكامل",
+        ph_age: "العمر",
+        ph_weight: "الوزن (كجم)",
+        ph_height: "الطول (سم)",
+        step2_title: "الموقع والثقافة",
+        location_info: "نستخدم منطقتك لتكييف خطط التغذية مع ثقافتك المحلية والمنتجات المتاحة بالقرب منك.",
+        label_country: "البلد",
+        ph_country: "مثال: المغرب، فرنسا، كندا...",
+        label_city: "المدينة (اختياري)",
+        ph_city: "مثال: الدار البيضاء، باريس...",
+        step3_title: "الأهداف والمستوى",
+        label_level: "مستواك الحالي",
+        label_goal: "هدفك الرئيسي",
+        step4_title: "السياق",
+        label_freq: "وتيرة التدريب (أيام/أسبوع)",
+        label_equip: "المعدات المتاحة",
+        ph_equip: "مثال: صالة ألعاب كاملة، أثقال منزلية...",
+        label_diet: "القيود الغذائية",
+        ph_diet: "مثال: نباتي، خالي من الغلوتين...",
+        btn_finish: "إتمام الإعداد",
+        btn_next: "التالي"
+      },
+      gender: {
+        homme: "ذكر",
+        femme: "أنثى"
+      },
+      level: {
+        débutant: "مبتدأ",
+        intermédiaire: "متوسط",
+        avancé: "متقدم",
+        athlète: "رياضي"
+      },
+      goal: {
+        perte_de_poids: "فقدان الوزن",
+        prise_de_masse: "زيادة الكتلة العضلية",
+        endurance: "التحمل",
+        flexibilité: "المرونة",
+        santé_globale: "الصحة العامة"
+      },
       tabs: { cockpit: "الرئيسية", sport: "رياضة", neural: "عصبي", fuel: "وقود", modules: "وحدات" },
       dashboard: { greeting: "مرحباً", stats_nutri: "تغذية", stats_work: "تدريب", unit_sessions: "جلسات", unit_kcal: "سعرة", section_active: "جاري", section_explore: "استكشاف", active_badge: "نشط", no_plan_title: "لا توجد خطة", no_plan_desc: "أنشئ خطة.", card_focus: "تركيز", card_sess: "جلسات", mod_nutri: "تغذية", mod_nutri_sub: "نشط", mod_gen: "توليد", mod_lib: "مكتبة", mod_lib_sub: "+200", mod_hist: "سجل", mod_hist_sub: "تقدم", mod_coach: "مدرب", mod_coach_sub: "محادثة" },
       profile: { language: "اللغة", title: "ملفي", default_name: "عضو", section_info: "معلومات", label_name: "الاسم", ph_name: "اسمك", label_age: "العمر", ph_age: "عمرك", label_weight: "الوزن", label_height: "الطول", label_goal: "الهدف", ph_goal: "هدف...", label_level: "النشاط", ph_level: "مستوى...", section_config: "إعدادات", label_exp: "خبرة", label_equip: "معدات", label_freq: "جلسات", section_physique: "جسم", section_stats: "إحصاءات", stat_streak: "أيام", stat_points: "نقاط", stat_level: "مستوى", stat_weight: "وزن", section_sub: "اشتراك", badge_active: "نشط", sub_renewal: "تجديد", sub_auto: "تلقائي", member_elite: "نخبة", member_standard: "عادي", sub_free: "مجاني", sub_desc_free: "محدود", sub_desc_premium: "غير محدود", sub_action: "ترقية", sub_manage: "إدارة", btn_save: "حفظ", btn_saving: "جاري...", section_settings: "إعدادات", theme: "سمة", support: "دعم", legal: "قانوني", logout: "خروج", section_danger: "خطر", deactivate: "تعطيل", delete: "حذف", alerts: { welcome: "مرحباً", welcome_msg: "تم الفتح", sub_downgrade: "مجاني", error: "خطأ", error_plan: "فشل", confirm_logout: "خروج؟", success: "نجاح", saved: "حفظ" }, footer: { version: "v1.0", system: "نظام", copyright: "حقوق" } },

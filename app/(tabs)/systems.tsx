@@ -73,7 +73,7 @@ export default function SystemsScreen() {
       subtitle: t('systems.subtitles.logistics'),
       items: [
         { id: 'shopping', name: t('systems.modules.shopping'), icon: 'cart-outline', lib: Ionicons, route: '/features/shopping', color: '#F97316' },
-        { id: 'meal_prep', name: t('systems.modules.meal_prep'), icon: 'food-drumstick-outline', lib: MaterialCommunityIcons, route: '/features/meal_prep', color: '#84CC16' },
+        { id: 'meal_prep', name: t('systems.modules.meal_prep'), icon: 'food-drumstick-outline', lib: MaterialCommunityIcons, route: '/features/meal_prep', color: '#84CC16',isPremium: true },
       ]
     }
   ];
