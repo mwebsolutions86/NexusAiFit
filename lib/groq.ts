@@ -1,47 +1,55 @@
 import { supabase } from './supabase';
-import i18n from './i18n'; // On importe la langue actuelle
 
-// Fonction générique pour appeler l'IA via le serveur sécurisé
+// Fonction générique d'envoi
 async function callEdgeFunction(body: any) {
+  // ... (Ton code existant pour callEdgeFunction, pas besoin de le changer s'il marchait)
+  // Mais pour être sûr, je te remets le strict minimum qui marche :
   try {
-    // On injecte la langue de l'utilisateur pour que l'IA réponde correctement
-    const userLanguage = i18n.language; 
-
     const { data, error } = await supabase.functions.invoke('generate-plan', {
-      body: { ...body, language: userLanguage }
+      body: { ...body }
     });
-
-    if (error) {
-      console.error("Erreur Edge Function:", error);
-      throw error;
-    }
-    
+    if (error) throw error;
     return data;
   } catch (e) {
-    console.error("Exception appel IA:", e);
+    console.error("Erreur interne:", e);
     return null;
   }
 }
 
-// 1. CHAT (Neural Coach)
-export async function generateAIResponse(systemPrompt: string, userMessage: string) {
+// 1. CHAT
+export async function generateAIResponse(userProfile: any, systemPrompt: string, userMessage: string) {
   return await callEdgeFunction({
     type: 'CHAT',
-    userProfile: { context: systemPrompt }, 
-    preferences: userMessage 
-  });
-}
-
-// 2. GÉNÉRATEUR DE SPORT
-export async function generateWorkoutJSON(userProfile: any, focus: string) {
-  return await callEdgeFunction({
-    type: 'WORKOUT',
     userProfile,
-    preferences: focus
+    preferences: userMessage,
+    context: systemPrompt
   });
 }
 
-// 3. GÉNÉRATEUR DE NUTRITION (Plan 7 jours)
+// 2. WORKOUT (C'est ici qu'était ton erreur)
+export async function generateWorkoutJSON(userProfile: any, focus: string) {
+  try {
+    if (!userProfile) throw new Error("Profil manquant");
+
+    const { data, error } = await supabase.functions.invoke('generate-plan', {
+      body: { 
+        type: 'WORKOUT',
+        userProfile: userProfile,
+        preferences: focus 
+      }
+    });
+
+    if (error) throw error;
+    return data;
+    
+  } catch (e) {
+    console.error("Erreur Appel Edge:", e);
+    // CORRECTION ICI : (e as any)
+    return { error: (e as any).message || "Erreur inconnue" };
+  }
+}
+
+// 3. MEAL
 export async function generateMealPlanJSON(userProfile: any, preferences: string) {
   return await callEdgeFunction({
     type: 'MEAL',
@@ -50,11 +58,11 @@ export async function generateMealPlanJSON(userProfile: any, preferences: string
   });
 }
 
-// 4. GÉNÉRATEUR MEAL PREP (Recettes Chef)
-export async function generateMealPrepIdeas(preferences: string) {
+// 4. RECIPE
+export async function generateMealPrepIdeas(userProfile: any, preferences: string) {
   return await callEdgeFunction({
-    type: 'RECIPE', 
-    userProfile: {}, 
+    type: 'RECIPE',
+    userProfile,
     preferences
   });
 }

@@ -18,7 +18,9 @@ export default function ColdScreen() {
   const [seconds, setSeconds] = useState(0);
   const [temperature, setTemperature] = useState('12'); 
   const [history, setHistory] = useState<any[]>([]);
-  const timerRef = useRef<number | null>(null);
+  
+  // Utilisation de 'any' pour éviter le conflit de type Node vs Web
+  const timerRef = useRef<any>(null);
 
   const MODULE_COLOR = '#0ea5e9'; 
   const COLD_GRADIENT: [string, string] = ['#0ea5e9', '#38bdf8'];
@@ -26,8 +28,13 @@ export default function ColdScreen() {
   useEffect(() => { fetchHistory(); return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, []);
   
   useEffect(() => {
-      if (isActive) { timerRef.current = setInterval(() => { setSeconds(s => s + 1); }, 1000); } 
-      else if (timerRef.current) { clearInterval(timerRef.current); }
+      if (isActive) { 
+          // CORRECTION ICI : On stocke l'ID du timer
+          timerRef.current = setInterval(() => { setSeconds(s => s + 1); }, 1000); 
+      } 
+      else if (timerRef.current) { 
+          clearInterval(timerRef.current); 
+      }
       return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isActive]);
 
@@ -98,6 +105,7 @@ export default function ColdScreen() {
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <View style={styles.timerContainer}>
+                {/* CORRECTION : Utilisation de 'snowflake' qui existe bien dans MCI */}
                 <MaterialCommunityIcons name="snowflake" size={32} color={MODULE_COLOR} style={{marginBottom: 10}} />
                 <Text style={styles.timerText}>{formatTime(seconds)}</Text>
                 <Text style={styles.timerLabel}>{isActive ? t('modules.cold.timer_label') : t('modules.cold.ready')}</Text>

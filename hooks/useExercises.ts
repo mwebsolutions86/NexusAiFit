@@ -1,6 +1,6 @@
 // app/hooks/useExercises.ts
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 export type Exercise = {
   id: string;

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,9 +9,10 @@ import { supabase } from '../../lib/supabase';
 
 // --- HOOKS ---
 import { useTheme } from '../../lib/theme';
-import { useUserProfile } from '../hooks/useUserProfile'; // Assure-toi que ce fichier existe
-import { useDashboardStats } from '../hooks/useDashboardStats';
-import { useActivePlans } from '../hooks/useActivePlans';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import { useDashboardStats } from '../../hooks/useDashboardStats';
+import { useActivePlans } from '../../hooks/useActivePlans';
+import { useSubscription } from '../../hooks/useSubscription';
 
 // --- COMPONENTS UI ---
 import { ScreenLayout } from '../../components/ui/ScreenLayout';
@@ -31,7 +32,9 @@ const useCurrentUser = () => {
 
 const ProgressWidget = ({ label, value, target, unit, icon, color }: any) => {
     const { colors } = useTheme();
-    const percentage = target > 0 ? Math.min(value / target, 1) : 0;
+    // Sécurité division par zéro
+    const safeTarget = target > 0 ? target : 2500;
+    const percentage = Math.min(value / safeTarget, 1);
     
     return (
         <GlassCard style={styles.widgetCard}>
@@ -43,8 +46,8 @@ const ProgressWidget = ({ label, value, target, unit, icon, color }: any) => {
             </View>
             <View style={{ marginTop: 15 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 5 }}>
-                    <Text style={[styles.widgetValue, { color: colors.text }]}>{value}</Text>
-                    <Text style={[styles.widgetTarget, { color: colors.textSecondary }]}> / {target} {unit}</Text>
+                    <Text style={[styles.widgetValue, { color: colors.text }]}>{Math.round(value)}</Text>
+                    <Text style={[styles.widgetTarget, { color: colors.textSecondary }]}> / {Math.round(safeTarget)} {unit}</Text>
                 </View>
                 <View style={[styles.progressBg, { backgroundColor: colors.border }]}>
                     <LinearGradient
@@ -65,15 +68,45 @@ export default function DashboardScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  // 1. Récupération des données via React Query
+  // 1. Récupération des données
   const { data: userId } = useCurrentUser();
-  const { data: profile } = useUserProfile();
+  const { userProfile } = useUserProfile();
+  
+  // Note: On passe activeMealPlan en paramètre optionnel si le hook le supporte, 
+  // sinon on calcule le target ici-même.
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useDashboardStats(userId);
   const { data: plans, isLoading: plansLoading, refetch: refetchPlans } = useActivePlans(userId);
+  
+  // 2. Vérification Premium
+  const { isPremium } = useSubscription();
 
   const isLoading = statsLoading || plansLoading;
   const activeWorkout = plans?.workoutPlan;
   const activeMealPlan = plans?.mealPlan;
+
+  // --- CORRECTION : CALCUL DYNAMIQUE DE L'OBJECTIF CALORIQUE ---
+ // --- CALCUL DYNAMIQUE ROBUSTE ---
+  const dynamicCaloriesTarget = useMemo(() => {
+    // Si un plan nutritionnel est actif
+    if (activeMealPlan?.days?.[0]?.meals) {
+        let total = 0;
+        activeMealPlan.days[0].meals.forEach((m: any) => {
+            // Cas 1 : Structure détaillée (avec liste d'ingrédients 'items')
+            if (m.items && Array.isArray(m.items)) {
+                m.items.forEach((i: any) => total += (Number(i.calories) || 0));
+            } 
+            // Cas 2 : Structure simple (calories directement sur le repas)
+            // Cela permet de supporter les anciens plans ou les erreurs d'IA
+            else if (m.calories) {
+                total += (Number(m.calories) || 0);
+            }
+        });
+        // Si le total trouvé est cohérent (> 500 kcal), on l'utilise. Sinon 2500.
+        return total > 500 ? total : 2500;
+    }
+    // Fallback profil
+    return stats?.targetCalories || 2500;
+  }, [activeMealPlan, stats]);
 
   const onRefresh = () => {
     refetchStats();
@@ -81,7 +114,7 @@ export default function DashboardScreen() {
     queryClient.invalidateQueries({ queryKey: ['userProfile'] });
   };
 
-  const userName = profile?.full_name?.split(' ')[0] || 'Athlète';
+  const userName = userProfile?.full_name?.split(' ')[0] || 'Athlète';
 
   return (
     <ScreenLayout>
@@ -105,8 +138,8 @@ export default function DashboardScreen() {
         <View style={styles.statsRow}>
            <ProgressWidget 
               label={t('dashboard.stats_nutri')} 
-              value={stats?.caloriesConsumed || 0} 
-              target={stats?.targetCalories || 2500} // Tu pourras affiner ce target plus tard
+              value={stats?.caloriesConsumed || 0} // Vient du hook connecté à nutrition_logs
+              target={dynamicCaloriesTarget} // Vient du calcul local sur le plan IA
               unit={t('dashboard.unit_kcal')}
               icon="fire" 
               color={colors.success} 
@@ -115,7 +148,7 @@ export default function DashboardScreen() {
            <ProgressWidget 
               label={t('dashboard.stats_work')} 
               value={stats?.weeklyWorkouts || 0} 
-              target={4} 
+              target={userProfile?.training_days || 4} 
               unit="S." 
               icon="dumbbell" 
               color={colors.primary} 
@@ -127,7 +160,7 @@ export default function DashboardScreen() {
         <TouchableOpacity 
           style={styles.mainCardContainer}
           activeOpacity={0.9}
-          onPress={() => router.push('/features/workout-tracker')}
+          onPress={() => router.push('/(tabs)/workout')}
         >
           <LinearGradient
             colors={activeWorkout ? [colors.primary, colors.secondary] : [colors.glass, colors.glass]}
@@ -172,7 +205,7 @@ export default function DashboardScreen() {
             sub={activeMealPlan ? t('dashboard.mod_nutri_sub') : t('dashboard.mod_gen')}
             icon="food-apple"
             color={colors.success}
-            path="/features/nutrition-plan"
+            path="/(tabs)/nutrition" /* <--- CORRECTION ICI : Redirection vers l'onglet */
           />
           <NavCard 
             title={t('dashboard.mod_lib')}
@@ -181,13 +214,17 @@ export default function DashboardScreen() {
             color="#f59e0b"
             path="/features/exercise-library"
           />
+          
+          {/* CARTE HISTORIQUE VERROUILLÉE */}
           <NavCard 
             title={t('dashboard.mod_hist')}
             sub={t('dashboard.mod_hist_sub')}
             icon="history"
             color="#8b5cf6"
             path="/features/workout_log"
+            isLocked={!isPremium}
           />
+          
           <NavCard 
             title={t('dashboard.mod_coach')}
             sub={t('dashboard.mod_coach_sub')}
@@ -201,20 +238,57 @@ export default function DashboardScreen() {
   );
 }
 
-// Composant interne pour la grille
-const NavCard = ({ title, sub, icon, color, path }: any) => {
+// Composant interne NavCard (Inchangé mais inclus pour complétude)
+const NavCard = ({ title, sub, icon, color, path, isLocked = false }: any) => {
     const router = useRouter();
     const { colors } = useTheme();
+
+    const handlePress = () => {
+        if (isLocked) {
+            Alert.alert(
+                "Fonctionnalité Premium 🔒",
+                "L'accès à l'historique complet et aux analyses est réservé aux membres Elite.",
+                [
+                    { text: "Annuler", style: "cancel" },
+                    { text: "Débloquer", onPress: () => router.push('/subscription') }
+                ]
+            );
+        } else {
+            router.push(path);
+        }
+    };
+
     return (
-        <TouchableOpacity style={[styles.gridItem, { backgroundColor: colors.glass, borderColor: colors.border }]} onPress={() => router.push(path)}>
+        <TouchableOpacity 
+            style={[
+                styles.gridItem, 
+                { 
+                    backgroundColor: colors.glass, 
+                    borderColor: colors.border,
+                    opacity: isLocked ? 0.7 : 1
+                }
+            ]} 
+            onPress={handlePress}
+            activeOpacity={0.7}
+        >
             <View style={styles.gridHeader}>
-                <View style={[styles.iconBox, { backgroundColor: color + '15' }]}>
-                    <MaterialCommunityIcons name={icon} size={18} color={color} />
+                <View style={[styles.iconBox, { backgroundColor: isLocked ? colors.textSecondary + '20' : color + '15' }]}>
+                    <MaterialCommunityIcons 
+                        name={icon} 
+                        size={18} 
+                        color={isLocked ? colors.textSecondary : color} 
+                    />
                 </View>
-                <Ionicons name="arrow-forward" size={16} color={colors.border} />
+                <Ionicons 
+                    name={isLocked ? "lock-closed" : "arrow-forward"} 
+                    size={16} 
+                    color={isLocked ? colors.textSecondary : colors.border} 
+                />
             </View>
             <View>
-                <Text style={[styles.gridTitle, { color: colors.text }]}>{title}</Text>
+                <Text style={[styles.gridTitle, { color: colors.text }]}>
+                    {title} {isLocked && "💎"}
+                </Text>
                 <Text style={[styles.gridSub, { color: colors.textSecondary }]}>{sub}</Text>
             </View>
         </TouchableOpacity>

@@ -1,193 +1,285 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, Platform, ActivityIndicator } from 'react-native';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
+
+// Hooks & UI
 import { useTheme } from '../../lib/theme';
-import { useTranslation } from 'react-i18next'; // Import
+import { useUserProfile } from '../../hooks/useUserProfile';
+import { useAIWorkout } from '../../hooks/useAIWorkout'; // Le Hook V2
+import { useWorkoutLogger } from '../../hooks/useWorkoutLogger';
+import { useSubscription } from '../../hooks/useSubscription';
+
+import { ScreenLayout } from '../../components/ui/ScreenLayout';
+import { GlassCard } from '../../components/ui/GlassCard';
+import { NeonButton } from '../../components/ui/NeonButton';
 
 export default function WorkoutScreen() {
+  const { colors } = useTheme();
   const router = useRouter();
-  const theme = useTheme();
-  const { t } = useTranslation(); // Hook
+  const { t } = useTranslation();
+  
+  // --- LOGIQUE BACKEND CORRIGÉE ---
+  const { userProfile } = useUserProfile();
+  
+  // On récupère les fonctions du Hook V2 et on les renomme pour matcher ton UI
+  const { 
+    workoutPlan: rawPlan, 
+    generateWorkout, 
+    loading: isGenerating 
+  } = useAIWorkout();
 
-  const handlePress = (route: string) => {
-    if (Platform.OS !== 'web') Haptics.selectionAsync();
-    router.push(route as any);
+  // ADAPTATEUR: Ton UI utilise 'activePlan.content', on adapte la structure ici
+  const activePlan = rawPlan ? { content: rawPlan } : null;
+
+  // On garde le logger existant
+  const { saveWorkout, isSaving } = useWorkoutLogger();
+  const { isPremium } = useSubscription();
+
+  // États Locaux
+  const [userFocus, setUserFocus] = useState('');
+  const [activeDayIndex, setActiveDayIndex] = useState(0);
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [completedExercises, setCompletedExercises] = useState<Record<string, boolean>>({});
+
+  // --- ACTIONS ---
+
+  const handleGenerate = async () => {
+    if (!userFocus.trim()) {
+      Alert.alert("Objectif requis", "Ex: Pectoraux, Cardio, Jambes...");
+      return;
+    }
+
+    // SÉCURITÉ : On vérifie le profil
+    if (!userProfile) {
+        Alert.alert("Profil manquant", "Veuillez attendre le chargement du profil.");
+        return;
+    }
+    
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      // APPEL CORRIGÉ : On passe le profil et le focus directement
+      await generateWorkout(userProfile, userFocus);
+      
+      setUserFocus('');
+      Alert.alert("Prêt !", "Nouveau programme chargé.");
+    } catch (e: any) {
+        if (e.message === "FREE_LIMIT_REACHED") Alert.alert("Limite Gratuite", "Revenez la semaine prochaine ou passez Premium.");
+        else if (e.message === "FREE_PLAN_ACTIVE") Alert.alert("Plan Actif", "Terminez votre plan actuel d'abord.");
+        else Alert.alert("Erreur", e.message);
+    }
   };
 
-  const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg },
-    safeArea: { flex: 1, paddingTop: Platform.OS === 'android' ? 25 : 0 },
+  const handleStartSession = () => {
+    setIsSessionActive(true);
+    setCompletedExercises({});
+  };
 
-    // Aurora uniquement en Dark Mode
-    auroraBg: { ...StyleSheet.absoluteFillObject, zIndex: -1, overflow: 'hidden' },
-    blob: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.2 },
+  const toggleExercise = (index: number) => {
+    if (!isSessionActive) return;
+    if (Platform.OS !== 'web') Haptics.selectionAsync();
+    const key = `ex_${index}`;
+    setCompletedExercises(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 10, marginTop: Platform.OS === 'ios' ? 10 : 0 },
-    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    headerTitle: { color: theme.colors.text, fontSize: 14, fontWeight: '900', letterSpacing: 1 },
-
-    content: { padding: 20, paddingTop: 10 },
-    subtitle: { color: theme.colors.textSecondary, fontSize: 12, marginBottom: 15, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1 },
-
-    // Main Card (Generator)
-    mainCard: { 
-      marginBottom: 25, 
-      borderRadius: 24, 
-      overflow: 'hidden', 
-      borderWidth: 1, 
-      borderColor: theme.colors.primary, 
-      backgroundColor: theme.colors.glass,
-      shadowColor: theme.isDark ? 'transparent' : theme.colors.primary,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: theme.isDark ? 0 : 0.2,
-      shadowRadius: 10,
-      elevation: theme.isDark ? 0 : 5,
-    },
-    cardGradient: { flexDirection: 'row', alignItems: 'center', padding: 20 },
+  const handleFinish = async () => {
+    if (!activePlan?.content?.days) return;
+    const currentDay = activePlan.content.days[activeDayIndex];
     
-    iconContainer: { 
-      width: 50, 
-      height: 50, 
-      borderRadius: 14, 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      marginRight: 15,
-      backgroundColor: theme.colors.primary, 
-    },
-    
-    textContainer: { flex: 1 },
-    cardTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 0.5, marginBottom: 4, color: theme.colors.text },
-    cardDesc: { color: theme.colors.textSecondary, fontSize: 12, lineHeight: 16 },
+    // Construction du Snapshot pour l'historique
+    const exercisesDone: any[] = [];
+    currentDay.exercises.forEach((ex: any, idx: number) => {
+        if (completedExercises[`ex_${idx}`]) {
+            exercisesDone.push({
+                name: ex.name,
+                sets: ex.sets,
+                reps: ex.reps,
+                weight: 0 
+            });
+        }
+    });
 
-    // Grid Layout
-    grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 15 },
+    if (exercisesDone.length === 0) {
+        Alert.alert("Session Vide", "Validez au moins un exercice.");
+        return;
+    }
 
-    // Small Cards
-    smallCard: { 
-      width: '47%', 
-      backgroundColor: theme.colors.glass, 
-      borderRadius: 20, 
-      padding: 15, 
-      borderWidth: 1, 
-      borderColor: theme.colors.border, 
-      alignItems: 'center', 
-      marginBottom: 15,
-      shadowColor: theme.isDark ? 'transparent' : '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: theme.isDark ? 0 : 0.05,
-      shadowRadius: 8,
-      elevation: theme.isDark ? 0 : 2,
-    },
-    
-    iconBox: { 
-      width: 50, 
-      height: 50, 
-      borderRadius: 16, 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      marginBottom: 10,
-    },
-    
-    smallCardTitle: { color: theme.colors.text, fontSize: 12, fontWeight: '900', marginBottom: 2 },
-    smallCardDesc: { color: theme.colors.textSecondary, fontSize: 10 },
-  });
+    await saveWorkout({
+        logDate: new Date().toISOString().split('T')[0],
+        exercisesDone,
+        note: `${activePlan.content.title} - ${currentDay.focus}`
+    });
+
+    setIsSessionActive(false);
+    Alert.alert("Bravo !", "Séance enregistrée.");
+    if (isPremium) router.push('/features/workout_log' as any);
+  };
+
+  // --- RENDERS (INCHANGÉS) ---
+
+  const renderGenerator = () => (
+    <GlassCard style={{ padding: 25, alignItems: 'center' }}>
+        <MaterialCommunityIcons name="dumbbell" size={50} color={colors.primary} style={{marginBottom: 15}} />
+        <Text style={{ fontSize: 20, fontWeight: '900', color: colors.text, marginBottom: 10 }}>NEURAL COACH</Text>
+        <Text style={{ textAlign: 'center', color: colors.textSecondary, marginBottom: 20 }}>
+            L'IA analyse votre profil pour créer l'entraînement parfait.
+        </Text>
+        
+        <View style={{ width: '100%', marginBottom: 20 }}>
+            <Text style={{ color: colors.primary, fontSize: 10, fontWeight: 'bold', marginBottom: 5, marginLeft: 5 }}>OBJECTIF DE LA SÉANCE</Text>
+            <TextInput 
+                style={{ backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: 12, padding: 15, color: colors.text }}
+                placeholder="Ex: Dos & Biceps, HIIT, Force..."
+                placeholderTextColor={colors.textSecondary}
+                value={userFocus}
+                onChangeText={setUserFocus}
+            />
+        </View>
+
+        <NeonButton 
+            label="GÉNÉRER LE PROGRAMME" 
+            onPress={handleGenerate} 
+            loading={isGenerating} 
+            icon="flash"
+        />
+    </GlassCard>
+  );
+
+  const renderActivePlan = () => {
+      const content = activePlan?.content;
+      if (!content?.days) return renderGenerator();
+      
+      const safeIndex = Math.min(activeDayIndex, content.days.length - 1);
+      const day = content.days[safeIndex];
+
+      return (
+          <View>
+              {/* Header Plan */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
+                  <View>
+                      <Text style={{ fontSize: 20, fontWeight: '900', color: colors.text }}>{content.title}</Text>
+                      <Text style={{ color: colors.primary, fontWeight: 'bold' }}>
+                          {isSessionActive ? "🟢 SÉANCE EN COURS" : `${content.days.length} SESSIONS`}
+                      </Text>
+                  </View>
+                  {!isSessionActive && (
+                      <TouchableOpacity onPress={handleGenerate} style={{ padding: 10, backgroundColor: colors.glass, borderRadius: 12 }}>
+                          <Ionicons name="refresh" size={20} color={colors.text} />
+                      </TouchableOpacity>
+                  )}
+              </View>
+
+              {/* Tabs Jours */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, marginBottom: 20 }}>
+                  {content.days.map((d: any, i: number) => (
+                      <TouchableOpacity 
+                        key={i}
+                        disabled={isSessionActive}
+                        onPress={() => setActiveDayIndex(i)}
+                        style={{
+                            paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1,
+                            backgroundColor: activeDayIndex === i ? colors.primary : 'transparent',
+                            borderColor: colors.primary
+                        }}
+                      >
+                          <Text style={{ fontWeight: 'bold', color: activeDayIndex === i ? '#fff' : colors.textSecondary }}>
+                              {d.day || `J${i+1}`}
+                          </Text>
+                      </TouchableOpacity>
+                  ))}
+              </ScrollView>
+
+              {/* Focus du Jour */}
+              <GlassCard style={{ marginBottom: 20 }}>
+                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: colors.text, marginBottom: 15, textTransform: 'uppercase' }}>
+                      {day.focus}
+                  </Text>
+                  
+                  {day.exercises?.map((ex: any, i: number) => {
+                      const isChecked = completedExercises[`ex_${i}`];
+                      return (
+                          <TouchableOpacity 
+                            key={i} 
+                            disabled={!isSessionActive}
+                            onPress={() => toggleExercise(i)}
+                            style={{ 
+                                flexDirection: 'row', alignItems: 'center', paddingVertical: 12, 
+                                borderBottomWidth: 1, borderColor: colors.border,
+                                opacity: (isSessionActive && isChecked) ? 0.5 : 1
+                            }}
+                          >
+                              {isSessionActive && (
+                                  <View style={{
+                                      width: 24, height: 24, borderRadius: 6, borderWidth: 2, marginRight: 15,
+                                      borderColor: isChecked ? colors.success : colors.textSecondary,
+                                      backgroundColor: isChecked ? colors.success : 'transparent',
+                                      justifyContent: 'center', alignItems: 'center'
+                                  }}>
+                                      {isChecked && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                  </View>
+                              )}
+                              <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 15, fontWeight: 'bold', color: colors.text }}>{ex.name}</Text>
+                                  {ex.notes && <Text style={{ fontSize: 11, color: colors.textSecondary }}>{ex.notes}</Text>}
+                              </View>
+                              <View style={{ alignItems: 'flex-end' }}>
+                                  <Text style={{ fontWeight: '900', color: colors.primary }}>{ex.sets} x {ex.reps}</Text>
+                                  <Text style={{ fontSize: 10, color: colors.textSecondary }}>{ex.rest}s repos</Text>
+                              </View>
+                          </TouchableOpacity>
+                      );
+                  })}
+              </GlassCard>
+
+              {/* Actions */}
+              {!isSessionActive ? (
+                  <NeonButton label="DÉMARRER LA SÉANCE" icon="play" onPress={handleStartSession} />
+              ) : (
+                  <NeonButton 
+                    label={isSaving ? "SAUVEGARDE..." : "TERMINER LA SÉANCE"} 
+                    icon="stop" 
+                    onPress={handleFinish} 
+                    style={{ backgroundColor: colors.danger, borderColor: colors.danger }} // Rouge pour stop
+                  />
+              )}
+          </View>
+      );
+  };
 
   return (
-    <View style={styles.container}>
-      <StatusBar 
-        barStyle={theme.isDark ? "light-content" : "dark-content"} 
-        backgroundColor="transparent" 
-        translucent={true} 
-      />
-      
-      {theme.isDark && (
-        <View style={styles.auroraBg}>
-            <View style={[styles.blob, { top: -100, left: -50, backgroundColor: 'rgba(0, 243, 255, 0.15)' }]} />
-            <View style={[styles.blob, { bottom: 0, right: -50, backgroundColor: 'rgba(0, 100, 255, 0.15)' }]} />
-        </View>
-      )}
-
-      <SafeAreaView style={styles.safeArea}>
-        
+    <ScreenLayout>
         <View style={styles.header}>
-            <View style={styles.headerLeft}>
-                <MaterialCommunityIcons name="dumbbell" size={24} color={theme.colors.primary} />
-                {/* Utilisation d'une clé générique proche ou du titre traduit */}
-                <Text style={styles.headerTitle}>{t('workout_tracker.title')}</Text>
-            </View>
+            <Text style={[styles.headerTitle, {color: colors.text}]}>WORKOUT</Text>
+            {/* Raccourci vers l'historique (Premium) */}
+            <TouchableOpacity onPress={() => isPremium ? router.push('/features/workout_log' as any) : Alert.alert("Premium", "Historique réservé aux membres.")}>
+                <MaterialCommunityIcons name="history" size={24} color={isPremium ? colors.primary : colors.textSecondary} />
+            </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.content}>
+            {activePlan ? renderActivePlan() : renderGenerator()}
             
-            <Text style={styles.subtitle}>{t('systems.categories.perf')}</Text>
-
-            {/* 1. GÉNÉRATEUR DE PROGRAMME (IA) */}
-            <TouchableOpacity style={styles.mainCard} activeOpacity={0.9} onPress={() => handlePress('/features/workout-tracker')}>
-                 <LinearGradient
-                    colors={theme.isDark 
-                        ? ['rgba(0, 243, 255, 0.1)', 'rgba(0, 100, 255, 0.05)'] 
-                        : ['rgba(0, 102, 255, 0.05)', 'rgba(255, 255, 255, 0.5)']}
-                    start={{x:0, y:0}} end={{x:1, y:1}}
-                    style={styles.cardGradient}
-                >
-                    <View style={styles.iconContainer}>
-                        <MaterialCommunityIcons name="brain" size={32} color={theme.colors.bg} /> 
-                    </View>
-                    <View style={styles.textContainer}>
-                        <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>{t('workout_tracker.ia_title')}</Text>
-                        <Text style={styles.cardDesc}>{t('workout_tracker.ia_desc')}</Text>
-                    </View>
-                    <MaterialCommunityIcons name="chevron-right" size={24} color={theme.colors.primary} />
-                </LinearGradient>
+            {/* Lien vers la bibliothèque (pour ne pas perdre l'accès) */}
+            <TouchableOpacity 
+                style={{ marginTop: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => router.push('/features/exercise-library' as any)}
+            >
+                <MaterialCommunityIcons name="book-open-variant" size={20} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                <Text style={{ color: colors.textSecondary, fontWeight: 'bold' }}>Voir la Bibliothèque d'Exercices</Text>
             </TouchableOpacity>
-
-            <View style={styles.grid}>
-                {/* 2. BIBLIOTHÈQUE */}
-                <TouchableOpacity style={styles.smallCard} onPress={() => handlePress('/features/exercise-library')} activeOpacity={0.9}>
-                    <View style={[styles.iconBox, { backgroundColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : '#F3F4F6' }]}>
-                        <MaterialCommunityIcons name="book-open-variant" size={28} color={theme.colors.text} />
-                    </View>
-                    <Text style={styles.smallCardTitle}>{t('dashboard.mod_lib')}</Text>
-                    <Text style={styles.smallCardDesc}>{t('dashboard.mod_lib_sub')}</Text>
-                </TouchableOpacity>
-
-                {/* 3. CHRONO TACTIQUE */}
-                <TouchableOpacity style={styles.smallCard} onPress={() => handlePress('/features/timer')} activeOpacity={0.9}>
-                    <View style={[styles.iconBox, { backgroundColor: theme.isDark ? 'rgba(255, 170, 0, 0.2)' : '#FFF8E1' }]}>
-                        <MaterialCommunityIcons name="timer-outline" size={28} color={theme.colors.warning} />
-                    </View>
-                    <Text style={[styles.smallCardTitle, { color: theme.colors.warning }]}>{t('timer.title')}</Text>
-                    <Text style={styles.smallCardDesc}>{t('timer.mode_rest')} & {t('timer.mode_tabata')}</Text>
-                </TouchableOpacity>
-
-                {/* 4. CALCULATEUR 1RM */}
-                <TouchableOpacity style={styles.smallCard} onPress={() => handlePress('/features/calculator1rm')} activeOpacity={0.9}>
-                    <View style={[styles.iconBox, { backgroundColor: theme.isDark ? 'rgba(244, 114, 182, 0.2)' : '#FCE4EC' }]}>
-                        <MaterialCommunityIcons name="calculator" size={28} color="#ec4899" /> 
-                    </View>
-                    <Text style={[styles.smallCardTitle, { color: '#ec4899' }]}>{t('modules.rm1.title')}</Text>
-                    <Text style={styles.smallCardDesc}>Force Max</Text>
-                </TouchableOpacity>
-
-                {/* 5. HISTORIQUE */}
-                <TouchableOpacity style={[styles.smallCard, {opacity: 0.6}]} onPress={() => Alert.alert(t('systems.soon_title'), t('systems.soon_msg'))} activeOpacity={0.9}>
-                    <View style={[styles.iconBox, { backgroundColor: theme.isDark ? 'rgba(255, 255, 255, 0.05)' : '#F3F4F6' }]}>
-                        <MaterialCommunityIcons name="history" size={28} color={theme.colors.textSecondary} />
-                    </View>
-                    <Text style={[styles.smallCardTitle, { color: theme.colors.textSecondary }]}>{t('dashboard.mod_hist')}</Text>
-                    <Text style={styles.smallCardDesc}>{t('dashboard.mod_hist_sub')}</Text>
-                </TouchableOpacity>
-            </View>
-
+            
             <View style={{ height: 100 }} />
         </ScrollView>
-
-      </SafeAreaView>
-    </View>
+    </ScreenLayout>
   );
 }
+
+const styles = StyleSheet.create({
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 10 },
+    headerTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 2 },
+    content: { padding: 20 },
+});

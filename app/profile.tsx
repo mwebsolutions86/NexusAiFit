@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../lib/theme';
 import { useTranslation } from 'react-i18next';
-import i18n from '../lib/i18n'; // Import direct de l'instance i18n
+import i18n from '../lib/i18n';
 
 
 interface EditData {
@@ -99,7 +99,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // --- NOUVEAU : Changement de langue ---
   const toggleLanguage = () => {
       if (Platform.OS !== 'web') Haptics.selectionAsync();
       const current = i18n.language;
@@ -107,12 +106,20 @@ export default function ProfileScreen() {
       i18n.changeLanguage(next);
   };
 
+  // --- CORRECTION DU LOGOUT ---
   const handleLogout = () => {
       Alert.alert(t('profile.logout'), t('profile.alerts.confirm_logout'), [
           { text: 'Annuler', style: 'cancel' },
           { text: 'Oui', style: 'destructive', onPress: async () => {
-              await supabase.auth.signOut();
-              router.replace('/auth/index' as any);
+              try {
+                  await supabase.auth.signOut();
+                  // Redirection vers la racine (Landing Page)
+                  router.replace('/'); 
+              } catch (error) {
+                  console.error("Erreur logout:", error);
+                  // On force la redirection même en cas d'erreur
+                  router.replace('/');
+              }
           }}
       ]);
   };
@@ -210,7 +217,6 @@ export default function ProfileScreen() {
                   <Ionicons name={theme.isDark ? "moon" : "sunny"} size={18} color={theme.colors.textSecondary} />
               </TouchableOpacity>
 
-              {/* BOUTON CHANGEMENT DE LANGUE (NOUVEAU) */}
               <TouchableOpacity style={currentStyles.settingRow} onPress={toggleLanguage}>
                   <Text style={currentStyles.settingText}>{t('profile.language')}</Text>
                   <View style={{flexDirection:'row', alignItems:'center', gap:5}}>

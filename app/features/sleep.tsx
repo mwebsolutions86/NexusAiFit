@@ -99,7 +99,7 @@ export default function SleepScreen() {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <View style={styles.mainCard}>
                 <View style={styles.moonIcon}>
-                    <MaterialCommunityIcons name="bed-clock" size={32} color={MODULE_COLOR} />
+                    <MaterialCommunityIcons name="bed" size={32} color={MODULE_COLOR} />
                 </View>
                 <Text style={styles.questionText}>{t('modules.sleep.question')}</Text>
                 <View style={styles.inputContainer}>

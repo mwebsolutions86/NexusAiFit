@@ -1,172 +1,267 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Alert, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { useTranslation } from 'react-i18next';
-import { useQueryClient } from '@tanstack/react-query';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 
-import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../lib/theme';
-import { useActivePlans } from '../hooks/useActivePlans';
-
+import { useUserProfile } from '../../hooks/useUserProfile';
+import { useAINutrition } from '../../hooks/useAINutrition'; 
 import { ScreenLayout } from '../../components/ui/ScreenLayout';
 import { GlassCard } from '../../components/ui/GlassCard';
-import { NeonButton } from '../../components/ui/NeonButton';
-import { GlassButton } from '../../components/ui/GlassButton';
 
 export default function NutritionPlanScreen() {
-    const { colors } = useTheme();
-    const router = useRouter();
-    const { t } = useTranslation();
-    const queryClient = useQueryClient();
+  const theme = useTheme();
+  const router = useRouter();
+  
+  const { data: userProfile } = useUserProfile(); 
+  const { activePlan, generatePlan, isGenerating } = useAINutrition();
 
-    // Récupérer le plan actif
-    const [userId, setUserId] = React.useState<string>();
-    React.useEffect(() => { supabase.auth.getSession().then(({data}) => setUserId(data.session?.user.id))}, []);
-    const { data: plans, isLoading: isPlansLoading } = useActivePlans(userId);
+  const [userFocus, setUserFocus] = useState(''); 
+  const [activeDayIndex, setActiveDayIndex] = useState(0);
 
-    const [loading, setLoading] = useState(false);
-    const [preferences, setPreferences] = useState('');
-    const activeMealPlan = plans?.mealPlan;
+  // --- ACTIONS ---
 
-    const handleGenerate = async () => {
-        if (!userId) return;
-        setLoading(true);
+  const handleGenerate = async () => {
+    if (!userFocus.trim()) {
+      Alert.alert("Préférences Manquantes", "Précisez votre régime (ex: Keto, Végétarien, Prise de masse...)");
+      return;
+    }
+    
+    if (process.env.EXPO_OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
 
-        try {
-            // 1. Récupérer le profil complet pour l'adaptation culturelle
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', userId)
-                .single();
+    try {
+      await generatePlan({
+        userContext: userFocus,
+        userProfile: userProfile || {}
+      });
+      setUserFocus('');
+      Alert.alert("Succès", "Plan nutritionnel généré et activé.");
+    } catch (e: any) {
+      if (e.message === "FREE_PLAN_ACTIVE") {
+        Alert.alert(
+            "Plan Actif 🔒",
+            "Terminez votre semaine de nutrition actuelle avant d'en générer une nouvelle (Limitation Gratuite).",
+            [{ text: "Passer Premium", onPress: () => router.push('/subscription') }, { text: "OK" }]
+        );
+      } 
+      else if (e.message === "FREE_LIMIT_REACHED") {
+        Alert.alert(
+            "Quota Atteint ⏳",
+            "Vous avez déjà généré un plan cette semaine. Revenez dans 7 jours ou passez Premium.",
+            [{ text: "Débloquer", onPress: () => router.push('/subscription') }, { text: "Attendre" }]
+        );
+      }
+      else {
+        Alert.alert("Erreur", "Le Nutritionniste IA ne répond pas. " + e.message);
+      }
+    }
+  };
 
-            // 2. Appel à l'Edge Function Supabase
-            // On envoie 'userProfile' pour que l'IA sache où habite l'utilisateur
-            const { data: planAI, error: funcError } = await supabase.functions.invoke('generate-plan', {
-                body: { 
-                    userId, 
-                    type: 'nutrition', 
-                    userContext: preferences || "Equilibré, riche en protéines",
-                    userProfile: profile, // <--- AJOUT CRUCIAL
-                    language: 'fr'
-                }
+  // --- COMPOSANTS UI ---
+
+  const renderGenerator = () => (
+    <GlassCard style={styles.generatorCard}>
+      <View style={[styles.iconRing, { borderColor: theme.colors.success + '40', backgroundColor: theme.colors.success + '10' }]}>
+        <MaterialCommunityIcons name="food-apple" size={32} color={theme.colors.success} />
+      </View>
+      <Text style={[styles.title, { color: theme.colors.text }]}>BIO-FUEL AI</Text>
+      <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+        L'IA calcule vos macros et génère des repas adaptés à votre métabolisme.
+      </Text>
+
+      <View style={[styles.inputContainer, { borderColor: theme.colors.border }]}>
+        <Text style={[styles.label, { color: theme.colors.success }]}>PRÉFÉRENCES / ALLERGIES</Text>
+        <TextInput
+          style={[styles.input, { color: theme.colors.text }]}
+          placeholder="Ex: Keto, Sans gluten, 2500 kcal..."
+          placeholderTextColor={theme.colors.textSecondary}
+          value={userFocus}
+          onChangeText={setUserFocus}
+        />
+      </View>
+
+      <TouchableOpacity 
+        style={styles.generateBtn} 
+        onPress={handleGenerate}
+        disabled={isGenerating}
+      >
+        <LinearGradient
+          colors={[theme.colors.success, '#10b981']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={styles.gradientBtn}
+        >
+          {isGenerating ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="chef-hat" size={20} color="#fff" style={{marginRight:8}}/>
+              <Text style={styles.btnText}>GÉNÉRER LE MENU</Text>
+            </>
+          )}
+        </LinearGradient>
+      </TouchableOpacity>
+    </GlassCard>
+  );
+
+  const renderPlan = () => {
+    // Sécurité de base
+    if (!activePlan || !activePlan.content) return null;
+    const content = activePlan.content;
+
+    // Sécurité structure
+    if (!content.days || !Array.isArray(content.days) || content.days.length === 0) {
+        return <View><Text style={{color: theme.colors.text}}>Erreur de format plan</Text></View>;
+    }
+
+    const currentDay = content.days[activeDayIndex] || content.days[0];
+    
+    // --- CORRECTIF DU CRASH ---
+    // On s'assure que meals est toujours un tableau, même vide
+    const meals = currentDay.meals || [];
+
+    // Calcul rapide des macros du jour (si dispo)
+    let totalCals = 0, totalProt = 0;
+    
+    // On utilise la variable sécurisée 'meals' et pas currentDay.meals
+    meals.forEach(m => {
+        if (m.items && Array.isArray(m.items)) {
+            m.items.forEach(i => {
+                totalCals += i.calories || 0;
+                totalProt += i.protein || 0;
             });
-
-            if (funcError) throw funcError;
-            if (!planAI || !planAI.days) throw new Error("L'IA a renvoyé un format invalide. Veuillez réessayer.");
-
-            // 3. SAUVEGARDE EN BASE DE DONNÉES (C'était l'étape manquante !)
-            // D'abord, on désactive les anciens plans
-            await supabase
-                .from('meal_plans')
-                .update({ is_active: false })
-                .eq('user_id', userId);
-
-            // Ensuite, on insère le nouveau plan
-            const { error: insertError } = await supabase
-                .from('meal_plans')
-                .insert({
-                    user_id: userId,
-                    title: planAI.title || "Plan Nutritionnel IA",
-                    content: planAI, // On stocke tout le JSON généré
-                    is_active: true
-                });
-
-            if (insertError) throw insertError;
-
-            // 4. Rafraîchir l'interface
-            queryClient.invalidateQueries({ queryKey: ['activePlans'] });
-            Alert.alert("Succès", "Ton plan nutritionnel a été généré et adapté à ta région !");
-            setPreferences('');
-
-        } catch (e: any) {
-            // Affiche le vrai message d'erreur pour aider au débogage
-            console.error(e);
-            Alert.alert("Erreur IA", e.message || "Problème de connexion au cerveau IA.");
-        } finally {
-            setLoading(false);
         }
-    };
-
-    const renderGenerator = () => (
-        <GlassCard style={{ alignItems: 'center', padding: 25 }}>
-            <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: colors.success + '20', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
-                <MaterialCommunityIcons name="food-apple" size={30} color={colors.success} />
-            </View>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: colors.text, marginBottom: 10, textAlign: 'center' }}>
-                {t('nutrition_plan.generate_title') || "GÉNÉRATEUR DE DIÈTE IA"}
-            </Text>
-            <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 25, lineHeight: 20 }}>
-                {t('nutrition_plan.generate_desc') || "Laisse l'IA analyser ton métabolisme et créer le plan parfait pour tes objectifs."}
-            </Text>
-
-            <View style={{ width: '100%', marginBottom: 20 }}>
-                <Text style={{ color: colors.success, fontSize: 10, fontWeight: 'bold', marginBottom: 8, marginLeft: 5 }}>PRÉFÉRENCES (OPTIONNEL)</Text>
-                <TextInput
-                    style={{ backgroundColor: colors.bg, borderColor: colors.border, borderWidth: 1, borderRadius: 12, padding: 15, color: colors.text, height: 50 }}
-                    placeholder="Ex: Végétarien, Jeûne intermittent..."
-                    placeholderTextColor={colors.textSecondary}
-                    value={preferences}
-                    onChangeText={setPreferences}
-                />
-            </View>
-
-            <NeonButton 
-                label={loading ? "ANALYSE EN COURS..." : "GÉNÉRER LE PLAN"} 
-                onPress={handleGenerate} 
-                loading={loading}
-                icon="brain"
-            />
-        </GlassCard>
-    );
-
-    const renderActivePlan = () => (
-        <View>
-            <GlassCard style={{ marginBottom: 20, borderColor: colors.success }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text }}>{activeMealPlan.title}</Text>
-                    <Ionicons name="checkmark-circle" size={24} color={colors.success} />
-                </View>
-                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Plan actif généré par Nexus AI</Text>
-            </GlassCard>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, paddingHorizontal: 5 }}>
-                <Text style={{ color: colors.textSecondary, fontWeight: '900', letterSpacing: 1 }}>SEMAINE TYPE</Text>
-                <TouchableOpacity onPress={handleGenerate}>
-                    <Text style={{ color: colors.success, fontSize: 12, fontWeight: 'bold' }}>RÉGÉNÉRER</Text>
-                </TouchableOpacity>
-            </View>
-
-            {activeMealPlan.days?.map((day: any, index: number) => (
-                <GlassCard key={index} style={{ marginBottom: 10 }}>
-                    <Text style={{ color: colors.success, fontWeight: 'bold', marginBottom: 10 }}>JOUR {index + 1}</Text>
-                    {day.meals?.map((meal: any, mIndex: number) => (
-                        <View key={mIndex} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: mIndex === day.meals.length - 1 ? 0 : 1, borderColor: colors.border }}>
-                            <Text style={{ color: colors.text, flex: 1 }}>{meal.name}</Text>
-                            <Text style={{ color: colors.textSecondary, fontWeight: 'bold' }}>{meal.calories} kcal</Text>
-                        </View>
-                    ))}
-                </GlassCard>
-            ))}
-        </View>
-    );
+    });
 
     return (
-        <ScreenLayout>
-             <View style={styles.header}>
-                <GlassButton icon="arrow-back" iconFamily="Ionicons" onPress={() => router.back()} />
-                <Text style={{ fontSize: 12, fontWeight: '900', letterSpacing: 2, color: colors.text }}>PLAN NUTRITION</Text>
-                <View style={{ width: 48 }} />
-            </View>
+      <View>
+        {/* Header Plan */}
+        <View style={styles.planHeader}>
+          <View>
+            <Text style={[styles.planTitle, { color: theme.colors.text }]}>{content.title}</Text>
+            <Text style={[styles.planSub, { color: theme.colors.success }]}>
+              {content.days.length} JOURS • ~{totalCals} KCAL
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => setUserFocus('Update')} style={styles.regenBtn}>
+            <Ionicons name="refresh" size={20} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
 
-            <ScrollView contentContainerStyle={{ padding: 20 }}>
-                {!activeMealPlan ? renderGenerator() : renderActivePlan()}
-            </ScrollView>
-        </ScreenLayout>
+        {/* Tabs Jours */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
+          {content.days.map((day: any, index: number) => {
+            const isActive = index === activeDayIndex;
+            return (
+              <TouchableOpacity
+                key={index}
+                onPress={() => { 
+                    if (process.env.EXPO_OS !== 'web') Haptics.selectionAsync(); 
+                    setActiveDayIndex(index); 
+                }}
+                style={[
+                  styles.tab,
+                  { 
+                    backgroundColor: isActive ? theme.colors.success : theme.colors.glass,
+                    borderColor: isActive ? theme.colors.success : theme.colors.border
+                  }
+                ]}
+              >
+                <Text style={[styles.tabText, { color: isActive ? '#fff' : theme.colors.textSecondary }]}>
+                  {day.day || `J${index+1}`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Liste Repas */}
+        <View style={{ marginTop: 20 }}>
+            {meals.length === 0 ? (
+                <Text style={{color: theme.colors.textSecondary, fontStyle:'italic'}}>Aucun repas pour ce jour.</Text>
+            ) : (
+                meals.map((meal: any, index: number) => (
+                    <GlassCard key={index} style={{ marginBottom: 15 }}>
+                        <View style={styles.mealHeader}>
+                            <Text style={[styles.mealTitle, { color: theme.colors.success }]}>{meal.name}</Text>
+                            <MaterialCommunityIcons name="silverware-fork-knife" size={16} color={theme.colors.textSecondary} />
+                        </View>
+                        
+                        {(meal.items || []).map((item: any, idx: number) => (
+                            <View key={idx} style={styles.foodItem}>
+                                <View style={{flex:1}}>
+                                    <Text style={[styles.foodName, { color: theme.colors.text }]}>{item.name}</Text>
+                                    {item.notes && <Text style={[styles.foodNote, { color: theme.colors.textSecondary }]}>{item.notes}</Text>}
+                                </View>
+                                <View style={styles.macros}>
+                                    <Text style={[styles.macroText, { color: theme.colors.text }]}>{item.calories} kcal</Text>
+                                    <Text style={[styles.macroSub, { color: theme.colors.textSecondary }]}>P: {item.protein}g</Text>
+                                </View>
+                            </View>
+                        ))}
+                    </GlassCard>
+                ))
+            )}
+        </View>
+      </View>
     );
+  };
+
+  return (
+    <ScreenLayout>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>NUTRITION SYSTEM</Text>
+        <View style={{width:24}} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content}>
+        {!activePlan ? renderGenerator() : renderPlan()}
+      </ScrollView>
+    </ScreenLayout>
+  );
 }
 
 const styles = StyleSheet.create({
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 10 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
+  backBtn: { padding: 8 },
+  headerTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 2 },
+  content: { padding: 20, paddingBottom: 100 },
+  
+  // Generator
+  generatorCard: { padding: 24, alignItems: 'center' },
+  iconRing: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth:1 },
+  title: { fontSize: 20, fontWeight: '900', letterSpacing: 1, marginBottom: 8 },
+  subtitle: { fontSize: 13, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  inputContainer: { width: '100%', borderWidth: 1, borderRadius: 16, padding: 16, marginBottom: 24 },
+  label: { fontSize: 10, fontWeight: 'bold', marginBottom: 8, letterSpacing: 1 },
+  input: { fontSize: 16, fontWeight: '500' },
+  generateBtn: { width: '100%', borderRadius: 16, overflow: 'hidden' },
+  gradientBtn: { paddingVertical: 18, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
+  btnText: { color: '#fff', fontWeight: '900', letterSpacing: 1, fontSize: 14 },
+
+  // Plan
+  planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  planTitle: { fontSize: 24, fontWeight: '900', fontStyle: 'italic', flex: 1 },
+  planSub: { fontSize: 10, fontWeight: 'bold', marginTop: 4, letterSpacing: 1 },
+  regenBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12 },
+  
+  tabsScroll: { gap: 10, paddingBottom: 10 },
+  tab: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20, borderWidth: 1, minWidth: 60, alignItems: 'center' },
+  tabText: { fontWeight: 'bold', fontSize: 12 },
+
+  mealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
+  mealTitle: { fontSize: 16, fontWeight: 'bold', textTransform: 'uppercase' },
+  
+  foodItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  foodName: { fontSize: 14, fontWeight: '600' },
+  foodNote: { fontSize: 11, fontStyle: 'italic', marginTop: 2 },
+  macros: { alignItems: 'flex-end' },
+  macroText: { fontWeight: 'bold', fontSize: 14 },
+  macroSub: { fontSize: 10, marginTop: 2 }
 });
