@@ -45,6 +45,8 @@ export const useBodyMetrics = (type?: MetricType) => {
         .eq('user_id', user.id)
         .order('date', { ascending: false });
 
+
+      // FIX TYPAGE : On stocke l'objet complet pour comparer les dates.
       const latestItems: Record<string, any> = {}; 
       
       data?.forEach((item: any) => {
@@ -53,6 +55,7 @@ export const useBodyMetrics = (type?: MetricType) => {
           }
       });
       
+      // On re-map pour renvoyer la structure attendue par l'UI (key: value)
       const finalLatest: Record<string, number> = {};
       Object.keys(latestItems).forEach(key => {
           finalLatest[key] = latestItems[key].value;

@@ -32,11 +32,13 @@ const { width } = Dimensions.get('window');
 const MODULE_COLOR = '#8b5cf6'; // Violet pour la Biométrie
 const CARD_WIDTH = width * 0.85; 
 
-// FIX TYPING
+// FIX TYPING : Définir le type exact du nom des icônes MaterialCommunityIcons
 type MciName = ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+// Définir le type d'un élément de la liste
 type BodyPartItem = { id: MetricType, label: string, icon: MciName, group: 'trunk' | 'arms' | 'legs' };
 
-// Configuration des zones du corps
+// Configuration des zones du corps (utilise le type MciName)
 const BODY_PARTS: BodyPartItem[] = [
     { id: 'waist', label: 'Taille', icon: 'tape-measure', group: 'trunk' },
     { id: 'chest', label: 'Poitrine', icon: 'tshirt-crew-outline', group: 'trunk' },
@@ -124,7 +126,7 @@ const MeasurementCard = ({ part, latestValue, addMetric, setHistoryModalType, is
                  if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                  setIsEditing(false); // Ferme l'édition
              },
-             onError: (e: Error) => { 
+             onError: (e: Error) => { // ✅ CORRECTION TYPAGE
                  Alert.alert("Échec de l'enregistrement", e.message || "Problème de connexion/base de données.");
              }
         });
@@ -138,7 +140,7 @@ const MeasurementCard = ({ part, latestValue, addMetric, setHistoryModalType, is
     return (
         <Animated.View 
             layout={Layout.springify()} 
-            style={[styles.carouselCardWrapper, { marginRight: isLastInCarousel ? 40 : 15 }]} 
+            style={[styles.carouselCardWrapper, { marginRight: isLastInCarousel ? 40 : 15 }]} // Marge pour le snap
         >
             <GlassCard 
                 style={[
@@ -200,7 +202,7 @@ const MeasurementCard = ({ part, latestValue, addMetric, setHistoryModalType, is
                             <Text style={[styles.unitLarge, { color: colors.textSecondary }]}>cm</Text>
                         </View>
                         
-                        {/* ✅ Bouton Enregistrer (Visible et Actif) */}
+                        {/* Bouton Enregistrer (Visible et Actif) */}
                         <NeonButton
                             label="ENREGISTRER"
                             onPress={handleSave}
