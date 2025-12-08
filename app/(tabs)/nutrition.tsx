@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, RefreshControl, Platform, Dimensions, Alert, LayoutAnimation, UIManager } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, RefreshControl, Platform, Dimensions, Alert, LayoutAnimation, UIManager, Image } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
@@ -30,7 +30,7 @@ const getTodayIndex = () => {
 };
 
 const MacroBar = ({ label, value, total, color, delay = 0 }: any) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const width = useSharedValue(0);
   const safeTotal = total || 1; 
   const percent = Math.min((value / safeTotal) * 100, 100);
@@ -49,7 +49,8 @@ const MacroBar = ({ label, value, total, color, delay = 0 }: any) => {
             {Math.round(value)}g <Text style={{fontSize:10, color:colors.textSecondary}}>/ {Math.round(safeTotal)}g</Text>
         </Text>
       </View>
-      <View style={[styles.macroTrack, { backgroundColor: colors.glass }]}>
+      {/* Track adaptatif : sombre en dark, gris pâle en light */}
+      <View style={[styles.macroTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
         <Animated.View style={[styles.macroFill, { backgroundColor: color }, animatedStyle]} />
       </View>
     </Animated.View>
@@ -57,7 +58,7 @@ const MacroBar = ({ label, value, total, color, delay = 0 }: any) => {
 };
 
 export default function NutritionScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const router = useRouter();
   
   const today = new Date().toISOString().split('T')[0];
@@ -79,7 +80,7 @@ export default function NutritionScreen() {
   const consumedMap = useMemo(() => {
     const map: Record<string, boolean> = {};
     if (log?.meals_status) {
-        log.meals_status.forEach(item => {
+        log.meals_status.forEach((item: any) => {
             map[`${item.mealName}_${item.name}`] = true;
         });
     }
@@ -91,7 +92,6 @@ export default function NutritionScreen() {
       prot: log?.total_protein || 0
   };
 
-  // ✅ CORRECTION TS : "as any" permet d'accéder à .days sans erreur
   const dayTarget = useMemo(() => {
       const content = (mealPlan?.content || mealPlan) as any;
       
@@ -133,7 +133,8 @@ export default function NutritionScreen() {
                 "Quota de génération hebdomadaire atteint.\nPassez ELITE pour débloquer 7 plans/semaine.",
                 [
                     { text: "Annuler", style: "cancel" },
-                    { text: "Devenir Elite", onPress: () => router.push('/subscription') }
+                    // ✅ REDIRECTION SUBSCRIPTION
+                    { text: "Devenir Elite", onPress: () => router.push('/subscription' as any) }
                 ]
             );
           } else {
@@ -169,7 +170,19 @@ export default function NutritionScreen() {
   // --- RENDERERS ---
 
   const renderGenerator = () => (
-    <GlassCard style={styles.centerContent}>
+    <View 
+        style={[
+            styles.generatorWrapper, 
+            { 
+                backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#FFFFFF',
+                borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                shadowColor: "#000",
+                shadowOpacity: isDark ? 0 : 0.05,
+                shadowRadius: 10,
+                elevation: isDark ? 0 : 3
+            }
+        ]}
+    >
         <MaterialCommunityIcons name="food-apple" size={48} color={colors.success} style={{marginBottom: 15}} />
         <Text style={[styles.title, {color: colors.text}]}>GÉNÉRATEUR IA</Text>
         <Text style={[styles.desc, {color: colors.textSecondary}]}>Créez votre plan nutritionnel tactique sur mesure.</Text>
@@ -177,7 +190,14 @@ export default function NutritionScreen() {
         <View style={styles.inputContainer}>
             <Text style={[styles.label, {color: colors.success}]}>PRÉFÉRENCES (Optionnel)</Text>
             <TextInput 
-                style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
+                style={[
+                    styles.input, 
+                    { 
+                        backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : colors.bg, 
+                        borderColor: colors.border, 
+                        color: colors.text 
+                    }
+                ]}
                 placeholder="Ex: Keto, Jeûne intermittent, Vegan..."
                 placeholderTextColor={colors.textSecondary}
                 value={preferences}
@@ -186,12 +206,20 @@ export default function NutritionScreen() {
             />
         </View>
         
-        <NeonButton label="INITIALISER LE PLAN" onPress={handleGenerate} loading={isGenerating} icon="brain" />
-    </GlassCard>
+        <NeonButton 
+            label="INITIALISER LE PLAN" 
+            onPress={handleGenerate} 
+            loading={isGenerating || isLoadingPlan} 
+            icon="brain"
+            style={{
+                backgroundColor: isDark ? undefined : colors.success,
+                borderColor: isDark ? undefined : colors.success
+            }}
+        />
+    </View>
   );
 
   const renderPlan = () => {
-      // ✅ CORRECTION TS ICI AUSSI
       const content = (mealPlan?.content || mealPlan) as any;
       
       if (!content?.days) return renderGenerator();
@@ -217,12 +245,12 @@ export default function NutritionScreen() {
                                     { 
                                         backgroundColor: isActive ? colors.success : 'transparent',
                                         borderColor: isActive ? colors.success : (isTodayTab ? colors.primary : colors.border),
-                                        borderWidth: isTodayTab ? 1 : 1
+                                        borderWidth: 1
                                     }
                                 ]}
                             >
                                 <View style={{flexDirection:'row', alignItems:'center', gap: 4}}>
-                                    <Text style={{color: isActive ? '#fff' : colors.textSecondary, fontWeight:'bold', fontSize:12}}>
+                                    <Text style={{color: isActive ? '#000' : colors.textSecondary, fontWeight:'bold', fontSize:12}}>
                                         {d.day ? d.day.slice(0,3).toUpperCase() : `J${i+1}`}
                                     </Text>
                                     {isTodayTab && !isActive && <View style={{width:4, height:4, borderRadius:2, backgroundColor: colors.primary}} />}
@@ -261,12 +289,22 @@ export default function NutritionScreen() {
                           const mealCals = meal.items ? meal.items.reduce((acc: number, i: any) => acc + (parseInt(i.calories, 10) || 0), 0) : 0;
 
                           return (
-                              <GlassCard 
+                              <View 
                                 key={idx} 
-                                style={{ width: width * 0.85, padding: 0, overflow: 'hidden' }}
-                                intensity={30}
+                                style={[
+                                    styles.mealCardContainer,
+                                    { 
+                                        width: width * 0.85,
+                                        backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#FFFFFF',
+                                        borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                                        shadowColor: "#000",
+                                        shadowOpacity: isDark ? 0 : 0.05,
+                                        shadowRadius: 8,
+                                        elevation: isDark ? 0 : 3
+                                    }
+                                ]}
                               >
-                                  <View style={[styles.mealHeader, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
+                                  <View style={[styles.mealHeader, { backgroundColor: isDark ? colors.primary + '15' : colors.primary + '10', borderColor: isDark ? colors.primary + '30' : 'transparent' }]}>
                                       <Text style={[styles.mealTitle, { color: colors.text }]}>{meal.name.toUpperCase()}</Text>
                                       <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 10 }}>{mealCals} KCAL</Text>
                                   </View>
@@ -297,14 +335,14 @@ export default function NutritionScreen() {
                                                       backgroundColor: isChecked ? colors.success : 'transparent',
                                                       opacity: isEditable ? 1 : 0.5
                                                   }]}>
-                                                      {isChecked && <Ionicons name="checkmark" size={12} color="#000" />}
+                                                      {isChecked && <Ionicons name="checkmark" size={12} color={isDark ? "#000" : "#FFF"} />}
                                                       {!isChecked && !isEditable && <Ionicons name="lock-closed" size={10} color={colors.textSecondary} />}
                                                   </View>
                                               </TouchableOpacity>
                                           )
                                       })}
                                   </View>
-                              </GlassCard>
+                              </View>
                           )
                       })}
                   </ScrollView>
@@ -322,6 +360,13 @@ export default function NutritionScreen() {
 
   return (
     <ScreenLayout>
+        {/* Fond adaptatif */}
+        <Image 
+            source={require('../../assets/adaptive-icon.png')} 
+            style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02, transform: [{scale: 1.5}] }]}
+            blurRadius={40}
+        />
+
         <View style={styles.header}>
             <View>
                 <Text style={[styles.headerTitle, { color: colors.text }]}>CARBURANT</Text>
@@ -341,7 +386,20 @@ export default function NutritionScreen() {
             showsVerticalScrollIndicator={false}
         >
             {activeTab === todayIndex && (
-                <GlassCard style={styles.dashboardCard} intensity={20}>
+                <GlassCard 
+                    style={[
+                        styles.dashboardCard, 
+                        { 
+                            backgroundColor: isDark ? colors.glass : '#FFFFFF',
+                            borderColor: isDark ? colors.border : 'rgba(0,0,0,0.05)',
+                            shadowColor: "#000",
+                            shadowOpacity: isDark ? 0 : 0.05,
+                            shadowRadius: 10,
+                            elevation: isDark ? 0 : 3
+                        }
+                    ]} 
+                    intensity={isDark ? 20 : 0}
+                >
                     <View style={styles.calsRow}>
                         <View>
                             <Text style={[styles.calsValue, { color: colors.text }]}>{Math.round(dailyStats.cals)}</Text>
@@ -352,7 +410,7 @@ export default function NutritionScreen() {
                             <Ionicons name="flame" size={24} color={colors.warning} />
                         </View>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
                     <MacroBar label="PROGRÈS CALORIQUE" value={dailyStats.cals} total={dayTarget} color={colors.warning} delay={100} />
                     <MacroBar label="PROTÉINES" value={dailyStats.prot} total={180} color={colors.primary} delay={200} />
                 </GlassCard>
@@ -365,12 +423,12 @@ export default function NutritionScreen() {
             {/* --- TIROIR JOURNAL TACTIQUE --- */}
             {activeTab === todayIndex && (
                 <View style={{ paddingHorizontal: 20 }}>
-                     <TouchableOpacity 
+                      <TouchableOpacity 
                         onPress={toggleJournalDrawer} 
                         activeOpacity={0.8}
                         style={{ marginBottom: 10 }}
-                     >
-                        <GlassCard style={[styles.drawerHeader, { borderColor: colors.primary + '30' }]}>
+                      >
+                        <View style={[styles.drawerHeader, { borderColor: colors.primary + '30', backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF' }]}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                 <MaterialCommunityIcons name="history" size={20} color={colors.primary} />
                                 <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>
@@ -378,14 +436,14 @@ export default function NutritionScreen() {
                                 </Text>
                             </View>
                             <Ionicons name={showJournal ? "chevron-up" : "chevron-down"} size={20} color={colors.textSecondary} />
-                        </GlassCard>
-                     </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
 
-                     {showJournal && (
-                         <Animated.View entering={FadeInDown} style={{ marginTop: 5 }}>
-                             <FoodJournal date={today} />
-                         </Animated.View>
-                     )}
+                      {showJournal && (
+                          <Animated.View entering={FadeInDown} style={{ marginTop: 5 }}>
+                              <FoodJournal date={today} />
+                          </Animated.View>
+                      )}
                 </View>
             )}
 
@@ -399,21 +457,21 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 28, fontWeight: '900', letterSpacing: -1, fontStyle: 'italic' },
   headerDate: { fontSize: 10, fontWeight: 'bold', letterSpacing: 2, marginTop: 4 },
   
-  dashboardCard: { margin: 20, marginTop: 10, padding: 24, borderRadius: 30 },
+  dashboardCard: { margin: 20, marginTop: 10, padding: 24, borderRadius: 30, borderWidth: 1 },
   calsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
   calsValue: { fontSize: 42, fontWeight: '900', letterSpacing: -2 },
   calsLabel: { fontSize: 9, fontWeight: 'bold', letterSpacing: 2, marginTop: 2 },
   calsTarget: { fontSize: 12, fontWeight: '600', marginBottom: 6, opacity: 0.8 },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 20 },
+  divider: { height: 1, marginBottom: 20 },
 
   macroContainer: { marginBottom: 15 },
   macroHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   macroLabel: { fontSize: 9, fontWeight: 'bold', letterSpacing: 1 },
   macroValue: { fontSize: 12, fontWeight: 'bold' },
-  macroTrack: { height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.2)' },
+  macroTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
   macroFill: { height: '100%', borderRadius: 4 },
 
-  centerContent: { alignItems: 'center', padding: 30, margin: 20 },
+  generatorWrapper: { alignItems: 'center', padding: 30, margin: 20, borderRadius: 24, borderWidth: 1 },
   title: { fontSize: 20, fontWeight: '900', marginBottom: 10 },
   desc: { textAlign: 'center', marginBottom: 25, lineHeight: 20, fontSize: 13 },
   inputContainer: { width: '100%', marginBottom: 20 },
@@ -421,15 +479,15 @@ const styles = StyleSheet.create({
   input: { borderRadius: 12, borderWidth: 1, padding: 15, minHeight: 80, textAlignVertical: 'top' },
 
   planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
-  dayTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, borderWidth: 1, marginRight: 5 },
+  dayTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, marginRight: 5 },
   
-  mealHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
+  mealCardContainer: { borderRadius: 20, overflow: 'hidden', borderWidth: 1 },
+  mealHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1 },
   mealTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
   
   foodRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   foodName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
   checkbox: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
-  itemName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
   
   drawerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, borderRadius: 16, borderWidth: 1 },
   sectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },

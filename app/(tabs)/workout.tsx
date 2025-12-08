@@ -9,7 +9,7 @@ import {
   Alert, 
   Platform, 
   Dimensions, 
-  Image // ✅ Import Image présent
+  Image 
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -129,7 +129,7 @@ const TacticalExercise = ({ exercise, index, isSessionActive, isCompleted, onTog
                 
                 {isSessionActive ? (
                     <TouchableOpacity onPress={onToggle} style={[styles.checkBtn, { borderColor: isCompleted ? colors.success : colors.border, backgroundColor: isCompleted ? colors.success : 'transparent' }]}>
-                        {isCompleted && <Ionicons name="checkmark" size={16} color="#fff" />}
+                        {isCompleted && <Ionicons name="checkmark" size={16} color={isDark ? "#fff" : "#000"} />}
                     </TouchableOpacity>
                 ) : (
                     <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={colors.textSecondary} />
@@ -139,7 +139,7 @@ const TacticalExercise = ({ exercise, index, isSessionActive, isCompleted, onTog
             {expanded && (
                 <View style={[styles.exerciseDetails, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F9FAFB', borderTopColor: colors.border, borderTopWidth: 1 }]}>
                     <View style={styles.detailRow}>
-                        <MaterialCommunityCommunityIcons name="timer-sand" size={14} color={colors.warning} />
+                        <MaterialCommunityIcons name="timer-sand" size={14} color={colors.warning} />
                         <Text style={[styles.detailText, { color: colors.textSecondary }]}>Repos: {exercise.rest}s</Text>
                     </View>
                     {exercise.notes && (
@@ -276,8 +276,8 @@ export default function WorkoutScreen() {
                 onPress={handleGenerate} 
                 loading={isGenerating} 
                 icon="flash"
-                // ✅ FORCE COULEUR EN MODE CLAIR
                 style={{
+                    // Force le bleu en mode clair
                     backgroundColor: isDark ? undefined : colors.primary,
                     borderColor: isDark ? undefined : colors.primary
                 }}
@@ -364,7 +364,7 @@ export default function WorkoutScreen() {
 
   return (
     <ScreenLayout>
-        {/* FOND AMBIANT : Adaptatif Light/Dark */}
+        {/* FOND AMBIANT */}
         <Image 
             source={require('../../assets/adaptive-icon.png')} 
             style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02, transform: [{scale: 1.5}] }]}
@@ -386,26 +386,34 @@ export default function WorkoutScreen() {
             {(activePlan && !isRegenerating) ? renderActivePlan() : renderGenerator()}
         </ScrollView>
 
-        {/* FLOATING FOOTER (BOUTON LANCER) */}
+        {/* --- FLOATING FOOTER --- */}
         {(activePlan && !isRegenerating) && (
             <LinearGradient 
-                // ✅ DÉGRADÉ ADAPTATIF : Blanc vers transparent en Light Mode !
+                // Le dégradé du bas s'adapte pour que le bouton ne flotte pas dans le vide
                 colors={isDark ? ['transparent', 'rgba(0,0,0,0.9)', '#000'] : ['transparent', 'rgba(255,255,255,0.9)', '#FFFFFF']} 
                 style={[styles.floatingFooter, { bottom: Platform.OS === 'ios' ? 85 : 65 }]}
             >
                 {!isSessionActive ? (
-                    <NeonButton 
-                        label="LANCER LA MISSION" 
-                        icon="play" 
-                        onPress={handleStartSession} 
-                        // ✅ FORCE LE STYLE BLEU EN MODE CLAIR
-                        style={{ 
-                            width: '100%', 
-                            backgroundColor: isDark ? undefined : colors.primary, // Bleu en Light
-                            borderColor: isDark ? undefined : colors.primary,
-                        }}
-                    />
+                    // ✅ CONDITION STRICTE : Si Dark -> Neon, Si Light -> SolidBlue
+                    isDark ? (
+                        <NeonButton 
+                            label="LANCER LA MISSION" 
+                            icon="play" 
+                            onPress={handleStartSession} 
+                            style={{ width: '100%' }} 
+                        />
+                    ) : (
+                        <TouchableOpacity 
+                            onPress={handleStartSession}
+                            activeOpacity={0.8}
+                            style={[styles.solidButton, { backgroundColor: colors.primary }]}
+                        >
+                            <MaterialCommunityIcons name="play" size={24} color="#FFF" style={{ marginRight: 10 }} />
+                            <Text style={styles.solidButtonText}>LANCER LA MISSION</Text>
+                        </TouchableOpacity>
+                    )
                 ) : (
+                    // Bouton Stop (Rouge, on garde le NeonButton qui gère bien les styles danger)
                     <NeonButton 
                         label={isSaving ? "SYNCHRONISATION..." : "TERMINER MISSION"} 
                         icon="stop" 
@@ -460,4 +468,25 @@ const styles = StyleSheet.create({
     demoText: { fontSize: 11, fontWeight: 'bold', letterSpacing: 1 },
 
     floatingFooter: { position: 'absolute', left: 0, right: 0, padding: 20, paddingTop: 30 },
+
+    // ✅ NOUVEAU STYLE : Bouton Solide pour Mode Clair
+    solidButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        paddingVertical: 16,
+        borderRadius: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    solidButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '900',
+        letterSpacing: 1,
+    }
 });

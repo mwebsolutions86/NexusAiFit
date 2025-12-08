@@ -25,7 +25,7 @@ import { GlassCard } from '../../components/ui/GlassCard';
 const { width } = Dimensions.get('window');
 
 export default function SystemsScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme(); // ✅ Ajout isDark pour l'adaptation
   const { t } = useTranslation();
   const router = useRouter();
   
@@ -116,10 +116,10 @@ export default function SystemsScreen() {
 
   return (
     <ScreenLayout>
-        {/* FOND GRAPHIQUE */}
+        {/* FOND GRAPHIQUE (Adaptatif) */}
         <Image 
             source={require('../../assets/adaptive-icon.png')} 
-            style={[StyleSheet.absoluteFillObject, { opacity: 0.02, transform: [{scale: 1.5}] }]}
+            style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.02 : 0.05, transform: [{scale: 1.5}] }]}
             blurRadius={20}
         />
 
@@ -158,7 +158,6 @@ export default function SystemsScreen() {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.carouselContent}
                         decelerationRate="fast"
-                        // ✅ AJUSTEMENT : 175 (Largeur) + 12 (Marge) = 187
                         snapToInterval={187} 
                     >
                         {section.items.map((item, index) => {
@@ -176,14 +175,27 @@ export default function SystemsScreen() {
                                         style={{ marginRight: 12 }}
                                     >
                                         <GlassCard 
-                                            style={styles.card}
-                                            intensity={isLocked ? 10 : 25}
+                                            style={[
+                                                styles.card,
+                                                // ✅ ADAPTATION COULEURS :
+                                                { 
+                                                    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF',
+                                                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                                                    shadowColor: isDark ? undefined : "#000",
+                                                    shadowOpacity: isDark ? 0 : 0.05,
+                                                    shadowRadius: 10,
+                                                    elevation: isDark ? 0 : 3
+                                                }
+                                            ]}
+                                            intensity={isLocked ? 10 : (isDark ? 25 : 0)} // Pas de flou en Light
                                         >
                                             {/* Icône */}
                                             <View style={[
                                                 styles.iconBox, 
                                                 { 
-                                                    backgroundColor: isLocked ? 'rgba(255,255,255,0.05)' : item.color + '15',
+                                                    backgroundColor: isLocked 
+                                                        ? (isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6') 
+                                                        : item.color + '15',
                                                     borderColor: isLocked ? 'transparent' : item.color + '30',
                                                     borderWidth: 1
                                                 }
@@ -264,15 +276,14 @@ const styles = StyleSheet.create({
 
   carouselContent: { paddingHorizontal: 20, paddingRight: 10 },
   
-  // ✅ CARTE LARGEUR AUGMENTÉE (175px)
   card: { 
-      width: 175,  // Largeur demandée
-      height: 240, // Hauteur conservée pour le format Monolithe
+      width: 175, 
+      height: 240, 
       padding: 20, 
       justifyContent: 'space-between', 
       borderRadius: 26,
       borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.1)'
+      // borderColor: 'rgba(255,255,255,0.1)' // Géré dynamiquement
   },
   iconBox: { 
       width: 60, 

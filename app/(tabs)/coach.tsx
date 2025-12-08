@@ -12,7 +12,7 @@ import {
   Alert,
   Modal,
   ScrollView,
-  BackHandler
+  Image
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import Animated, { 
@@ -25,8 +25,6 @@ import Animated, {
   withSequence,
   withSpring,
   runOnJS,
-  interpolate,
-  Extrapolate
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
@@ -35,7 +33,7 @@ import { useTheme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { ScreenLayout } from '../../components/ui/ScreenLayout';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.85;
 
 interface Message {
@@ -54,35 +52,38 @@ interface Session {
 // --- COMPOSANTS UI ---
 
 const TypingIndicator = () => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const opacity = useSharedValue(0.3);
   useEffect(() => {
     opacity.value = withRepeat(withSequence(withTiming(1, { duration: 500 }), withTiming(0.3, { duration: 500 })), -1, true);
   }, []);
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return (
-    <Animated.View entering={FadeInLeft} style={[styles.aiBubble, { borderColor: colors.primary + '30', paddingVertical: 15 }]}>
+    <Animated.View entering={FadeInLeft} style={[styles.aiBubble, { borderColor: isDark ? colors.primary + '30' : 'rgba(0,0,0,0.05)', backgroundColor: isDark ? 'rgba(20,20,30,0.6)' : '#FFF', paddingVertical: 15 }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
         <MaterialCommunityIcons name="brain" size={16} color={colors.primary} />
-        <Animated.Text style={[{ color: colors.primary, fontSize: 12, fontWeight: 'bold' }, animatedStyle]}>NEURO PROCESSING...</Animated.Text>
+        <Animated.Text style={[{ color: colors.primary, fontSize: 12, fontWeight: 'bold' }, animatedStyle]}>NEXUS PROCESSING...</Animated.Text>
       </View>
     </Animated.View>
   );
 };
 
 const MessageBubble = ({ item }: { item: Message }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const isUser = item.isUser;
   return (
     <Animated.View entering={isUser ? FadeInRight.springify() : FadeInLeft.springify()} style={[styles.messageRow, isUser ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
       {!isUser && (
-        <View style={[styles.avatar, { borderColor: colors.primary }]}>
+        <View style={[styles.avatar, { borderColor: colors.primary, backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : '#fff' }]}>
            <MaterialCommunityIcons name="robot" size={14} color={colors.primary} />
         </View>
       )}
-      <View style={[isUser ? styles.userBubble : styles.aiBubble, isUser ? { backgroundColor: colors.primary } : { borderColor: colors.border, backgroundColor: 'rgba(20,20,30,0.6)' }]}>
-        <Text style={[styles.messageText, isUser ? { color: '#000', fontWeight: '600' } : { color: colors.text }]}>{item.text}</Text>
-        <Text style={[styles.timestamp, isUser ? { color: 'rgba(0,0,0,0.5)' } : { color: colors.textSecondary }]}>
+      <View style={[
+        isUser ? styles.userBubble : styles.aiBubble, 
+        isUser ? { backgroundColor: colors.primary } : { backgroundColor: isDark ? 'rgba(20,20,30,0.6)' : '#FFF', borderColor: isDark ? colors.border : 'rgba(0,0,0,0.05)', borderWidth: 1 }
+      ]}>
+        <Text style={[styles.messageText, isUser ? { color: '#FFF', fontWeight: '600' } : { color: colors.text }]}>{item.text}</Text>
+        <Text style={[styles.timestamp, isUser ? { color: 'rgba(255,255,255,0.7)' } : { color: colors.textSecondary }]}>
            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </Text>
       </View>
@@ -91,7 +92,7 @@ const MessageBubble = ({ item }: { item: Message }) => {
 };
 
 export default function CoachScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   
   // États Chat
   const [input, setInput] = useState('');
@@ -102,7 +103,7 @@ export default function CoachScreen() {
   
   // États Sidebar (Animation Manuelle)
   const [modalVisible, setModalVisible] = useState(false);
-  const sidebarX = useSharedValue(-SIDEBAR_WIDTH); // Position initiale (cachée à gauche)
+  const sidebarX = useSharedValue(-SIDEBAR_WIDTH); 
   const backdropOpacity = useSharedValue(0);
 
   const flatListRef = useRef<FlatList>(null);
@@ -110,15 +111,12 @@ export default function CoachScreen() {
   // --- LOGIQUE ANIMATION SIDEBAR ---
   const openSidebar = () => {
       setModalVisible(true);
-      // Animation fluide vers 0 (visible)
       sidebarX.value = withSpring(0, { damping: 20, stiffness: 90 }); 
       backdropOpacity.value = withTiming(1, { duration: 300 });
   };
 
   const closeSidebar = () => {
-      // Animation vers la gauche (-Largeur)
       sidebarX.value = withTiming(-SIDEBAR_WIDTH, { duration: 300 }, () => {
-          // Une fois l'anim finie, on cache le modal
           runOnJS(setModalVisible)(false);
       });
       backdropOpacity.value = withTiming(0, { duration: 300 });
@@ -161,7 +159,7 @@ export default function CoachScreen() {
     if (data) {
         setSessions([data, ...sessions]);
         setCurrentSessionId(data.id);
-        setMessages([{ id: 'intro', text: "Nexus en ligne. Je suis prêt à optimiser tes performances. Quelle est la mission ?", isUser: false, timestamp: new Date() }]);
+        setMessages([{ id: 'intro', text: "Nexus réinitialisé. Nouvelle session prête.", isUser: false, timestamp: new Date() }]);
         closeSidebar();
     }
   };
@@ -177,7 +175,7 @@ export default function CoachScreen() {
         setMessages(data.map(m => ({ id: m.id, text: m.content, isUser: m.role === 'user', timestamp: new Date(m.created_at) })));
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
     } else {
-        setMessages([{ id: 'intro', text: "Nexus prêt. Aucun historique pour cette session.", isUser: false, timestamp: new Date() }]);
+        setMessages([{ id: 'intro', text: "Nexus prêt. Aucun historique.", isUser: false, timestamp: new Date() }]);
     }
     setLoading(false);
   };
@@ -237,8 +235,15 @@ export default function CoachScreen() {
 
   return (
     <ScreenLayout>
+      {/* BACKGROUND */}
+      <Image 
+          source={require('../../assets/adaptive-icon.png')} 
+          style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02, transform: [{scale: 1.5}] }]}
+          blurRadius={30}
+      />
+
       {/* HEADER */}
-      <BlurView intensity={20} tint="dark" style={styles.header}>
+      <BlurView intensity={isDark ? 20 : 80} tint={isDark ? "dark" : "light"} style={styles.header}>
           <TouchableOpacity onPress={openSidebar} style={styles.menuBtn} hitSlop={{top:10, bottom:10, left:10, right:10}}>
              <MaterialCommunityIcons name="menu" size={28} color={colors.text} />
           </TouchableOpacity>
@@ -265,17 +270,17 @@ export default function CoachScreen() {
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         />
-        <BlurView intensity={50} tint="dark" style={[styles.inputWrapper, { borderTopColor: colors.border }]}>
-            <View style={[styles.inputContainer, { backgroundColor: 'rgba(0,0,0,0.3)', borderColor: colors.border }]}>
+        <BlurView intensity={isDark ? 50 : 90} tint={isDark ? "dark" : "light"} style={[styles.inputWrapper, { borderTopColor: colors.border }]}>
+            <View style={[styles.inputContainer, { backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.7)', borderColor: colors.border }]}>
                 <TextInput style={[styles.input, { color: colors.text }]} placeholder="Transmettre..." placeholderTextColor={colors.textSecondary} value={input} onChangeText={setInput} multiline />
                 <TouchableOpacity onPress={sendMessage} disabled={!input.trim() || loading} style={[styles.sendBtn, { backgroundColor: (!input.trim() || loading) ? colors.textSecondary : colors.primary }]}>
-                    <Ionicons name="arrow-up" size={20} color="#000" />
+                    <Ionicons name="arrow-up" size={20} color="#fff" />
                 </TouchableOpacity>
             </View>
         </BlurView>
       </KeyboardAvoidingView>
 
-      {/* --- SIDEBAR MODAL (FIXÉ) --- */}
+      {/* --- SIDEBAR MODAL (CONFIGURATION ORIGINALE) --- */}
       <Modal 
         visible={modalVisible} 
         transparent 
@@ -283,7 +288,7 @@ export default function CoachScreen() {
         animationType="none" // On gère l'anim nous-mêmes
         onRequestClose={closeSidebar}
       >
-          {/* BACKDROP (Fond sombre) */}
+          {/* BACKDROP */}
           <Animated.View style={[styles.backdrop, animatedBackdropStyle]}>
               <TouchableOpacity style={StyleSheet.absoluteFill} onPress={closeSidebar} activeOpacity={1}>
                   <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
@@ -292,8 +297,18 @@ export default function CoachScreen() {
           </Animated.View>
 
           {/* DRAWER (Menu Latéral) */}
-          <Animated.View style={[styles.sidebar, animatedSidebarStyle]}>
-              <View style={styles.sidebarHeader}>
+          <Animated.View 
+            style={[
+                styles.sidebar, 
+                animatedSidebarStyle, 
+                // ✅ ADAPTATION COULEURS UNIQUEMENT
+                { 
+                    backgroundColor: isDark ? '#000' : '#FFF', 
+                    borderRightColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' 
+                }
+            ]}
+          >
+              <View style={[styles.sidebarHeader, { borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
                   <Text style={[styles.sidebarTitle, { color: colors.text }]}>ARCHIVES</Text>
                   <TouchableOpacity onPress={closeSidebar} hitSlop={{top:15, bottom:15, left:15, right:15}}>
                       <Ionicons name="close" size={28} color={colors.textSecondary} />
@@ -301,7 +316,13 @@ export default function CoachScreen() {
               </View>
 
               <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-                  <TouchableOpacity onPress={createNewSession} style={[styles.newChatBtn, { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}>
+                  <TouchableOpacity 
+                    onPress={createNewSession} 
+                    style={[
+                        styles.newChatBtn, 
+                        { borderColor: colors.primary, backgroundColor: isDark ? colors.primary + '10' : colors.primary + '05' }
+                    ]}
+                  >
                       <Ionicons name="add" size={22} color={colors.primary} />
                       <Text style={{ color: colors.primary, fontWeight: '900' }}>NOUVELLE SESSION</Text>
                   </TouchableOpacity>
@@ -313,12 +334,17 @@ export default function CoachScreen() {
                       <TouchableOpacity 
                         key={session.id} 
                         onPress={() => selectSession(session.id)}
-                        style={[styles.sessionRow, session.id === currentSessionId ? { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' } : { backgroundColor: '#121214' }]}
+                        style={[
+                            styles.sessionRow, 
+                            session.id === currentSessionId 
+                                ? { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' } 
+                                : { backgroundColor: isDark ? '#121214' : '#F5F5F7', borderColor: 'transparent' } // ✅ Gris clair en Light Mode
+                        ]}
                       >
                           <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12}}>
                               <MaterialCommunityIcons name={session.id === currentSessionId ? "message-text" : "message-text-outline"} size={20} color={session.id === currentSessionId ? colors.primary : colors.textSecondary} />
                               <View style={{flex: 1}}>
-                                  <Text numberOfLines={1} style={{ color: session.id === currentSessionId ? '#fff' : colors.textSecondary, fontWeight: '600' }}>{session.title}</Text>
+                                  <Text numberOfLines={1} style={{ color: session.id === currentSessionId ? (isDark ? '#fff' : '#000') : colors.textSecondary, fontWeight: '600' }}>{session.title}</Text>
                                   <Text style={{fontSize: 10, color: colors.textSecondary, opacity: 0.5}}>{new Date(session.created_at).toLocaleDateString()}</Text>
                               </View>
                           </View>
@@ -345,7 +371,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 1, maxWidth: 200, textAlign: 'center' },
   listContent: { padding: 20, paddingBottom: 20 },
   messageRow: { flexDirection: 'row', marginBottom: 20, alignItems: 'flex-end' },
-  avatar: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center', marginRight: 8, marginBottom: 5, backgroundColor: 'rgba(0,0,0,0.5)' },
+  avatar: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center', marginRight: 8, marginBottom: 5 },
   userBubble: { padding: 14, borderRadius: 20, borderBottomRightRadius: 4, maxWidth: '80%' },
   aiBubble: { padding: 16, borderRadius: 20, borderBottomLeftRadius: 4, maxWidth: '85%', borderWidth: 1 },
   messageText: { fontSize: 15, lineHeight: 22 },
@@ -355,18 +381,18 @@ const styles = StyleSheet.create({
   input: { flex: 1, maxHeight: 100, fontSize: 16, paddingRight: 10, paddingTop: 5, paddingBottom: 5 },
   sendBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
 
-  // SIDEBAR STYLES FIX
+  // SIDEBAR STYLES (INTACTS)
   backdrop: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
   sidebar: {
     position: 'absolute', left: 0, top: 0, bottom: 0,
     width: width * 0.85, 
-    backgroundColor: '#000', // Fond opaque noir
-    borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.1)',
-    zIndex: 2, // Au dessus du backdrop
+    // Couleur gérée dynamiquement dans le composant
+    borderRightWidth: 1, 
+    zIndex: 2, 
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     shadowColor: "#000", shadowOffset: { width: 10, height: 0 }, shadowOpacity: 1, shadowRadius: 50, elevation: 50
   },
-  sidebarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)', marginTop: 10 },
+  sidebarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, marginTop: 10 },
   sidebarTitle: { fontSize: 22, fontWeight: '900', letterSpacing: 1 },
   newChatBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed' },
   sessionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'transparent' },
