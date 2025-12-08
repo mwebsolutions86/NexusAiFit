@@ -1,54 +1,32 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase'; // Vérifie ton chemin vers supabase
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '../lib/supabase';
 
-export function useUserProfile() {
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function fetchProfile() {
-      try {
-        // 1. On récupère l'utilisateur connecté
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (!user) {
-          if (isMounted) {
-             setIsLoading(false);
-             setUserProfile(null);
-          }
-          return;
-        }
-
-        // 2. On récupère son profil dans la table 'profiles'
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (error) throw error;
-
-        if (isMounted) {
-          console.log("👤 [useUserProfile] Profil chargé :", data?.id); // Log de vérification
-          setUserProfile(data);
-        }
-
-      } catch (err: any) {
-        console.error("❌ [useUserProfile] Erreur:", err.message);
-        if (isMounted) setError(err.message);
-      } finally {
-        if (isMounted) setIsLoading(false);
+export const useUserProfile = () => {
+  // 1. On récupère 'refetch' depuis useQuery
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user) {
+        return null;
       }
-    }
 
-    fetchProfile();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
 
-    return () => { isMounted = false; };
-  }, []);
+      if (error) throw error;
+      return data;
+    },
+  });
 
-  // On renvoie un objet simple
-  return { userProfile, isLoading, error };
-}
+  return { 
+    userProfile: data, 
+    isLoading, 
+    error,
+    refetch // ✅ 2. On l'ajoute ici pour qu'il soit accessible
+  };
+};

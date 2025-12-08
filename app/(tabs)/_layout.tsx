@@ -1,131 +1,233 @@
+import React, { useEffect } from 'react';
+import { View, StyleSheet, Platform, Dimensions, TouchableOpacity } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Platform, View, StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../../lib/theme';
-import { useTranslation } from 'react-i18next';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring, 
+  withTiming, 
+  interpolate, 
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 
-export default function TabLayout() {
-  const insets = useSafeAreaInsets();
-  const theme = useTheme();
-  const { t } = useTranslation();
+// Hooks
+import { useTheme } from '../../lib/theme';
 
-  // Hauteur de la barre flottante
-  const BAR_HEIGHT = 70;
+const { width } = Dimensions.get('window');
+const TAB_WIDTH = width - 40; 
+const TAB_ITEM_WIDTH = TAB_WIDTH / 5; 
+
+// --- COMPOSANT ICÔNE ---
+const TabIcon = ({ name, focused, color, isCenter }: any) => {
+  const scale = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    scale.value = withSpring(focused ? 1 : 0, { damping: 15, stiffness: 200 });
+    opacity.value = withTiming(focused ? 1 : 0.5, { duration: 200 });
+  }, [focused]);
+
+  const animatedIconStyle = useAnimatedStyle(() => {
+    const baseScale = isCenter ? 1.3 : 1; 
+    const activeScale = isCenter ? 1.5 : 1.2;
+    const scaleVal = interpolate(scale.value, [0, 1], [baseScale, activeScale]);
+    const translateY = interpolate(scale.value, [0, 1], [0, -3]); 
+    return {
+      transform: [{ scale: scaleVal }, { translateY }],
+      opacity: focused ? 1 : (isCenter ? 0.8 : 0.6)
+    };
+  });
+
+  const animatedDotStyle = useAnimatedStyle(() => ({
+    opacity: scale.value,
+    transform: [{ scale: scale.value }]
+  }));
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarShowLabel: true, 
-        tabBarStyle: {
-          position: 'absolute',
-          // MODIFICATION ICI : On descend la barre (était 25/20)
-          bottom: Platform.OS === 'ios' ? 15 : 10, 
-          left: 20,
-          right: 20,
-          height: BAR_HEIGHT,
-          borderRadius: 35, 
-          backgroundColor: theme.colors.glass,
-          borderTopWidth: 0, 
-          borderWidth: 1,
-          borderColor: theme.colors.border, 
-          elevation: 10, 
-          shadowColor: "#000", 
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.25,
-          shadowRadius: 10,
-          paddingBottom: 0, 
-          paddingTop: 0,
-        },
-        tabBarActiveTintColor: theme.colors.primary, 
-        tabBarInactiveTintColor: theme.colors.textSecondary, 
-        tabBarLabelStyle: {
-          fontSize: 9,
-          fontWeight: 'bold',
-          marginBottom: 10, 
-          letterSpacing: 0.5
-        },
-        tabBarItemStyle: {
-          height: BAR_HEIGHT,
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingVertical: 5
-        }
-      }}
-    >
-      {/* 1. COCKPIT */}
-      <Tabs.Screen name="dashboard" options={{
-          title: t('tabs.cockpit'),
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && { backgroundColor: theme.colors.primary + '15' }]}>
-               <MaterialCommunityIcons name={focused ? "view-dashboard" : "view-dashboard-outline"} size={24} color={color} />
-            </View>
-          ),
-      }} />
+    <View style={styles.iconContainer}>
+      <Animated.View style={animatedIconStyle}>
+        <MaterialCommunityIcons name={name} size={26} color={color} />
+      </Animated.View>
+      <Animated.View style={[styles.activeDot, { backgroundColor: color }, animatedDotStyle]} />
+    </View>
+  );
+};
 
-      {/* 2. SPORT */}
-      <Tabs.Screen name="workout" options={{
-          title: t('tabs.sport'),
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && { backgroundColor: theme.colors.primary + '15' }]}>
-               <MaterialCommunityIcons name={focused ? "dumbbell" : "dumbbell"} size={24} color={color} />
-            </View>
-          ),
-      }} />
+// --- TAB BAR DYNAMIQUE ---
+const CustomTabBar = ({ state, descriptors, navigation }: any) => {
+  // ✅ On récupère les couleurs et le mode (Dark/Light)
+  const { colors, isDark } = useTheme();
+  
+  const translateX = useSharedValue(0);
 
-      {/* 3. NEURAL (Coach) */}
-      <Tabs.Screen name="coach" options={{
-          title: t('tabs.neural'),
-          tabBarIcon: ({ color, focused }) => (
-            <View>
-                {focused && <View style={[styles.glow, { backgroundColor: theme.colors.primary }]} />}
-                <MaterialCommunityIcons name="brain" size={28} color={color} />
-            </View>
-          ),
-      }} />
+  useEffect(() => {
+    translateX.value = withSpring(state.index * TAB_ITEM_WIDTH, {
+      damping: 18, stiffness: 150, mass: 0.5
+    });
+  }, [state.index]);
+
+  const animatedCursorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }]
+  }));
+
+  return (
+    <View style={[styles.tabBarContainer, { 
+        // ✅ Ombre dynamique : noire en mode sombre, bleutée douce en mode clair
+        shadowColor: isDark ? "#000" : "#a0aec0", 
+        shadowOpacity: isDark ? 0.6 : 0.25 
+    }]}>
       
-      {/* 4. FUEL (Nutrition) */}
-      <Tabs.Screen name="nutrition" options={{
-          title: t('tabs.fuel'),
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && { backgroundColor: theme.colors.primary + '15' }]}>
-               <MaterialCommunityIcons name={focused ? "food-apple" : "food-apple-outline"} size={24} color={color} />
-            </View>
-          ),
-      }} />
+      {/* ✅ BLURVIEW ADAPTATIF : 'dark' ou 'light' */}
+      <BlurView intensity={isDark ? 40 : 80} tint={isDark ? "dark" : "light"} style={[styles.blurContainer, { backgroundColor: colors.nav }]}>
+        
+        {/* Bordure subtile */}
+        <View style={[styles.neonBorder, { borderColor: colors.navBorder }]} />
 
-      {/* 5. MODULES */}
-      <Tabs.Screen name="systems" options={{
-          title: t('tabs.modules'),
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[styles.iconContainer, focused && { backgroundColor: theme.colors.primary + '15' }]}>
-               <MaterialCommunityIcons name={focused ? "grid" : "grid-large"} size={24} color={color} />
-            </View>
-          ),
-      }} />
+        {/* CURSEUR LUMINEUX */}
+        <Animated.View style={[styles.cursorContainer, { width: TAB_ITEM_WIDTH }, animatedCursorStyle]}>
+           <LinearGradient
+             // ✅ Dégradé : Blanc/Bleu en light, Cyan/Transparent en dark
+             colors={isDark ? [colors.primary + '50', 'transparent'] : [colors.primary + '20', 'transparent']} 
+             style={styles.cursorGradient}
+             start={{ x: 0.5, y: 0 }}
+             end={{ x: 0.5, y: 1 }}
+           />
+           <View style={[styles.cursorLight, { backgroundColor: colors.primary }]} />
+        </Animated.View>
 
+        {/* ONGLETS */}
+        <View style={styles.tabsRow}>
+          {state.routes.map((route: any, index: number) => {
+            const { options } = descriptors[route.key];
+            const isFocused = state.index === index;
+
+            const onPress = () => {
+              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+              if (!isFocused && !event.defaultPrevented) {
+                if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.navigate(route.name);
+              }
+            };
+
+            let iconName = 'circle';
+            let isCenter = false;
+            if (route.name === 'dashboard') iconName = 'view-dashboard-outline';
+            if (route.name === 'workout') iconName = 'dumbbell';
+            if (route.name === 'coach') { iconName = 'brain'; isCenter = true; }
+            if (route.name === 'nutrition') iconName = 'food-apple-outline';
+            if (route.name === 'systems') iconName = 'cpu-64-bit';
+
+            // ✅ COULEURS ADAPTÉES
+            // En mode clair : Actif = Bleu Tech, Inactif = Gris moyen
+            // En mode sombre : Actif = Blanc, Inactif = Gris clair
+            const activeColor = isFocused 
+                ? (isDark ? '#fff' : colors.primary) 
+                : (isCenter ? colors.primary : colors.textSecondary);
+
+            return (
+              <TouchableOpacity
+                key={index}
+                accessibilityRole="button"
+                accessibilityState={isFocused ? { selected: true } : {}}
+                accessibilityLabel={options.tabBarAccessibilityLabel}
+                onPress={onPress}
+                style={styles.tabItem}
+                activeOpacity={1}
+              >
+                <TabIcon name={iconName} focused={isFocused} color={activeColor} isCenter={isCenter} />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </BlurView>
+    </View>
+  );
+};
+
+export default function TabLayout() {
+  return (
+    <Tabs
+      tabBar={props => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false, tabBarStyle: { display: 'none' } }}
+    >
+      <Tabs.Screen name="dashboard" options={{ title: 'QG' }} />
+      <Tabs.Screen name="workout" options={{ title: 'Sport' }} />
+      <Tabs.Screen name="coach" options={{ title: 'Neuro' }} />
+      <Tabs.Screen name="nutrition" options={{ title: 'Nutri' }} />
+      <Tabs.Screen name="systems" options={{ title: 'Systèmes' }} />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  tabBarContainer: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 25 : 15,
+    left: 20,
+    right: 20,
+    height: 70,
+    borderRadius: 35,
+    overflow: 'hidden',
+    // Les ombres sont gérées dynamiquement dans le composant
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  blurContainer: {
+    flex: 1,
+    // Background géré dynamiquement
+  },
+  neonBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 35,
+    borderWidth: 1,
+  },
+  cursorContainer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  cursorGradient: {
+    width: '50%',
+    height: '70%',
+    opacity: 0.5,
+  },
+  cursorLight: {
+    position: 'absolute',
+    top: 0,
+    width: 20,
+    height: 2,
+    borderRadius: 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    height: '100%',
+  },
+  tabItem: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  glow: {
+  iconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 50,
+    width: 50,
+  },
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 6,
     position: 'absolute',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    opacity: 0.2,
-    transform: [{ scale: 1.2 }],
-    top: -6,
-    left: -6
+    bottom: 10,
   }
 });

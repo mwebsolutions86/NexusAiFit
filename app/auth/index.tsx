@@ -1,33 +1,116 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  TextInput, 
+  KeyboardAvoidingView, 
+  Platform, 
+  ScrollView, 
+  Alert, 
+  ActivityIndicator, 
+  LayoutAnimation, 
+  UIManager,
+  Dimensions 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../lib/supabase';
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming, 
+  withSpring,
+  FadeInDown,
+  FadeInUp
+} from 'react-native-reanimated';
+
+import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../lib/theme';
 import { useTranslation } from 'react-i18next'; 
-import i18n from '../../lib/i18n';
+
+// Active LayoutAnimation sur Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const { width } = Dimensions.get('window');
+
+// --- COMPOSANT : HOLO INPUT ---
+const HoloInput = ({ 
+  icon, 
+  placeholder, 
+  value, 
+  onChangeText, 
+  secureTextEntry = false,
+  autoCapitalize = 'none',
+  keyboardType = 'default'
+}: any) => {
+  const { colors } = useTheme();
+  const focusVal = useSharedValue(0);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      borderColor: withTiming(focusVal.value === 1 ? '#00f3ff' : 'rgba(255,255,255,0.1)'),
+      backgroundColor: withTiming(focusVal.value === 1 ? 'rgba(0, 243, 255, 0.05)' : 'rgba(0,0,0,0.3)'),
+      transform: [{ scale: withSpring(focusVal.value === 1 ? 1.02 : 1) }]
+    };
+  });
+
+  return (
+    <Animated.View style={[styles.inputWrapper, animatedStyle]}>
+      <MaterialCommunityIcons 
+        name={icon} 
+        size={20} 
+        color={focusVal.value === 1 ? '#00f3ff' : 'rgba(255,255,255,0.7)'} 
+      />
+      <TextInput
+        // ✅ CORRECTION : Couleur forcée à BLANC (#FFF) pour la lisibilité
+        style={[styles.input, { color: '#FFFFFF' }]} 
+        placeholder={placeholder}
+        // ✅ CORRECTION : Placeholder gris clair fixe
+        placeholderTextColor="rgba(255,255,255,0.5)"
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secureTextEntry}
+        autoCapitalize={autoCapitalize}
+        keyboardType={keyboardType}
+        onFocus={() => {
+          focusVal.value = 1;
+          if (Platform.OS !== 'web') Haptics.selectionAsync();
+        }}
+        onBlur={() => {
+          focusVal.value = 0;
+        }}
+      />
+    </Animated.View>
+  );
+};
 
 export default function AuthScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { t } = useTranslation(); 
+  const { colors } = useTheme();
+  
   const [isLogin, setIsLogin] = useState(true); 
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  
-  // NOUVEAU : État pour la case à cocher
   const [termsAccepted, setTermsAccepted] = useState(false);
 
-  const toggleLanguage = () => {
-      const current = i18n.language;
-      const next = current === 'fr' ? 'en' : (current === 'en' ? 'ar' : 'fr');
-      i18n.changeLanguage(next);
+  // --- ACTIONS ---
+
+  const toggleMode = () => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsLogin(!isLogin);
+    setTermsAccepted(false);
   };
 
   const checkProfileAndRedirect = async (userId: string) => {
@@ -49,19 +132,18 @@ export default function AuthScreen() {
   };
 
   const handleAuth = async () => {
-    if (!email || !password) return Alert.alert("Erreur", "Veuillez remplir tous les champs.");
-    
-    // NOUVEAU : Vérification des conditions lors de l'inscription
-    if (!isLogin && !termsAccepted) {
+    if (!email || !password) {
         if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        return Alert.alert(
-            "Conditions Requises", 
-            "Veuillez accepter les conditions d'utilisation et confirmer que NexusAiFit ne remplace pas un avis médical pour continuer."
-        );
+        return Alert.alert("Accès Refusé", "Identifiants manquants.");
+    }
+    
+    if (!isLogin && !termsAccepted) {
+        if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return Alert.alert("Protocole Incomplet", "Veuillez accepter le Protocole Utilisateur.");
     }
 
     setLoading(true);
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     try {
       if (isLogin) {
@@ -72,15 +154,15 @@ export default function AuthScreen() {
         const { data: { session, user }, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         if (session && user) {
-            Alert.alert(t('alerts.welcome'), t('alerts.welcome_msg'));
+            Alert.alert("Bienvenue, Initié.", "Profil créé. Initialisation...");
             await checkProfileAndRedirect(user.id);
         } else {
-            Alert.alert(t('alerts.success'), "Email de confirmation envoyé.");
+            Alert.alert("Lien de Connexion Envoyé", "Vérifiez votre canal email pour activer l'accès.");
             setIsLogin(true);
         }
       }
     } catch (error: any) {
-      Alert.alert(t('auth.error_title'), error.message);
+      Alert.alert("Erreur Système", error.message);
     } finally {
       setLoading(false);
     }
@@ -97,151 +179,295 @@ export default function AuthScreen() {
         if (error) throw error;
         if (data?.url) await Linking.openURL(data.url);
      } catch (e: any) {
-        Alert.alert("Erreur Google Auth", e.message);
+        Alert.alert("Échec Liaison Google", e.message);
      }
   };
 
-  const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg },
-    safeArea: { flex: 1 },
-    auroraBg: { ...StyleSheet.absoluteFillObject, zIndex: -1 },
-    blob: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.2 },
-    
-    langBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-    langText: { color: '#fff', fontWeight: 'bold', fontSize: 10 },
-
-    header: { alignItems: 'center', marginBottom: 40, marginTop: 60 },
-    title: { color: theme.colors.text, fontSize: 32, fontWeight: '900', letterSpacing: 2 },
-    subtitle: { color: theme.colors.textSecondary, fontSize: 10, letterSpacing: 2, marginTop: 5 },
-    formContainer: { width: '100%' },
-    inputWrapper: { marginBottom: 20 },
-    label: { color: theme.colors.primary, fontSize: 10, fontWeight: 'bold', marginBottom: 8, marginLeft: 4 },
-    glassInput: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.glass, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 15, height: 55 },
-    input: { flex: 1, color: theme.colors.text, marginLeft: 10, fontWeight: 'bold' },
-    authBtn: { borderRadius: 12, overflow: 'hidden', marginTop: 10 },
-    btnGradient: { height: 55, justifyContent: 'center', alignItems: 'center' },
-    btnText: { color: '#fff', fontWeight: '900', letterSpacing: 1 },
-    dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-    line: { flex: 1, height: 1, backgroundColor: theme.colors.border },
-    orText: { color: theme.colors.textSecondary, fontSize: 10, marginHorizontal: 10, fontWeight: 'bold' },
-    googleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.glass, height: 55, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border },
-    googleText: { color: theme.colors.text, fontWeight: 'bold' },
-    switchBtn: { marginTop: 25, alignItems: 'center' },
-    switchText: { color: theme.colors.textSecondary, fontSize: 12 },
-
-    // NOUVEAUX STYLES POUR LA CASE À COCHER
-    termsContainer: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20, marginTop: 5 },
-    checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: theme.colors.textSecondary, marginRight: 10, justifyContent: 'center', alignItems: 'center', marginTop: 2 },
-    checkboxActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-    termsText: { flex: 1, color: theme.colors.textSecondary, fontSize: 11, lineHeight: 16 },
-    linkText: { color: theme.colors.primary, fontWeight: 'bold' }
-  });
+  // --- RENDER ---
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent={true} />
+      <StatusBar style="light" />
       
-      {theme.isDark && (
-        <View style={styles.auroraBg}>
-            <View style={[styles.blob, { top: -100, right: -50, backgroundColor: 'rgba(0, 243, 255, 0.1)' }]} />
-            <View style={[styles.blob, { bottom: 0, left: -50, backgroundColor: 'rgba(139, 92, 246, 0.1)' }]} />
-        </View>
-      )}
+      {/* 1. FOND DEEP SPACE */}
+      <LinearGradient
+        colors={['#000000', '#0a0a12', '#050505']}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={[styles.glowBlob, { top: -150, left: -50, backgroundColor: '#00f3ff', opacity: 0.1 }]} />
+      <View style={[styles.glowBlob, { bottom: -150, right: -50, backgroundColor: '#0066ff', opacity: 0.1 }]} />
 
-      <TouchableOpacity style={styles.langBtn} onPress={toggleLanguage}>
-          <Text style={styles.langText}>{i18n.language.toUpperCase()}</Text>
-      </TouchableOpacity>
-
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, justifyContent: 'center' }}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={styles.content}>
             
+            {/* EN-TÊTE */}
             <View style={styles.header}>
-                <Text style={styles.title}>NEXUS.ID</Text>
-                <Text style={styles.subtitle}>{t('auth.subtitle')}</Text>
+                <Animated.View entering={FadeInDown.duration(800).springify()}>
+                    <MaterialCommunityIcons name="fingerprint" size={60} color="#00f3ff" style={styles.logoIcon} />
+                </Animated.View>
+                <Text style={styles.title}>NEXUS<Text style={{color: '#00f3ff'}}>.ID</Text></Text>
+                <Text style={styles.subtitle}>{isLogin ? "IDENTIFICATION REQUISE" : "NOUVELLE INSCRIPTION"}</Text>
             </View>
 
-            <View style={styles.formContainer}>
-                <View style={styles.inputWrapper}>
-                    <Text style={styles.label}>IDENTIFIANT</Text>
-                    <View style={styles.glassInput}>
-                        <MaterialCommunityIcons name="email-outline" size={20} color={theme.colors.textSecondary} />
-                        <TextInput 
-                            style={styles.input} 
-                            placeholder={t('auth.email_placeholder')} 
-                            placeholderTextColor={theme.colors.textSecondary}
-                            autoCapitalize="none"
-                            keyboardType="email-address"
-                            value={email}
-                            onChangeText={setEmail}
-                        />
-                    </View>
-                </View>
+            {/* FORMULAIRE */}
+            <Animated.View entering={FadeInUp.delay(200).duration(800)} style={styles.formContainer}>
+                
+                <HoloInput 
+                    icon="email-outline" 
+                    placeholder="Identifiant (Email)" 
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                />
 
-                <View style={styles.inputWrapper}>
-                    <Text style={styles.label}>CLÉ DE SÉCURITÉ</Text>
-                    <View style={styles.glassInput}>
-                        <MaterialCommunityIcons name="lock-outline" size={20} color={theme.colors.textSecondary} />
-                        <TextInput 
-                            style={styles.input} 
-                            placeholder={t('auth.password_placeholder')} 
-                            placeholderTextColor={theme.colors.textSecondary}
-                            secureTextEntry
-                            value={password}
-                            onChangeText={setPassword}
-                        />
-                    </View>
-                </View>
+                <View style={{ height: 15 }} />
 
-                {/* NOUVEAU : CASE À COCHER (Visible uniquement lors de l'inscription) */}
+                <HoloInput 
+                    icon="lock-outline" 
+                    placeholder="Clé de sécurité (Mot de passe)" 
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                />
+
+                {/* CHECKBOX + LIEN LÉGAL */}
                 {!isLogin && (
-                    <TouchableOpacity 
-                        style={styles.termsContainer} 
-                        onPress={() => {
-                            if (Platform.OS !== 'web') Haptics.selectionAsync();
-                            setTermsAccepted(!termsAccepted);
-                        }}
-                        activeOpacity={0.8}
-                    >
-                        <View style={[styles.checkbox, termsAccepted && styles.checkboxActive]}>
-                            {termsAccepted && <MaterialCommunityIcons name="check" size={14} color="#fff" />}
-                        </View>
-                        <Text style={styles.termsText}>
-                            J'accepte les <Text style={styles.linkText}>CGU</Text> et je reconnais que NexusAiFit ne remplace pas un avis médical.
-                        </Text>
-                    </TouchableOpacity>
-                )}
+                    <View style={styles.termsRow}>
+                        <TouchableOpacity 
+                            style={{ flexDirection: 'row', alignItems: 'center' }} 
+                            onPress={() => {
+                                if (Platform.OS !== 'web') Haptics.selectionAsync();
+                                setTermsAccepted(!termsAccepted);
+                            }}
+                            activeOpacity={0.8}
+                        >
+                            <View style={[styles.checkbox, termsAccepted && { backgroundColor: '#00f3ff', borderColor: '#00f3ff' }]}>
+                                {termsAccepted && <Ionicons name="checkmark" size={12} color="#000" />}
+                            </View>
+                            <Text style={styles.termsText}>J'accepte le </Text>
+                        </TouchableOpacity>
 
-                <TouchableOpacity style={styles.authBtn} onPress={handleAuth} disabled={loading}>
-                    <LinearGradient colors={[theme.colors.primary, theme.colors.secondary]} start={{x:0, y:0}} end={{x:1, y:0}} style={styles.btnGradient}>
-                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>{isLogin ? t('auth.login_action') : t('auth.signup_action')}</Text>}
+                        <TouchableOpacity onPress={() => router.push('/profile/legal')}>
+                            <Text style={[styles.termsText, { color: '#00f3ff', fontWeight: 'bold', textDecorationLine: 'underline' }]}>
+                                Protocole Utilisateur
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+                <Text style={{ textAlign: 'center', color: '#666', fontSize: 10, marginTop: 20, paddingHorizontal: 20 }}>
+  En continuant, vous acceptez nos <Text style={{color: colors.primary}} onPress={() => Linking.openURL('...')}>CGU</Text>. 
+  Nexus n'est pas un médecin.
+</Text>
+
+                <View style={{ height: 30 }} />
+
+                {/* BOUTON D'ACTION */}
+                <TouchableOpacity onPress={handleAuth} disabled={loading} activeOpacity={0.8}>
+                    <LinearGradient
+                        colors={['#00f3ff', '#0066ff']}
+                        start={{x:0, y:0}} end={{x:1, y:0}}
+                        style={styles.authBtn}
+                    >
+                        {loading ? (
+                            <ActivityIndicator color="#000" />
+                        ) : (
+                            <Text style={styles.authBtnText}>{isLogin ? "ACCÉDER AU SYSTÈME" : "INITIALISER LE COMPTE"}</Text>
+                        )}
                     </LinearGradient>
                 </TouchableOpacity>
 
-                <View style={styles.dividerContainer}>
+                {/* SÉPARATEUR */}
+                <View style={styles.divider}>
                     <View style={styles.line} />
-                    <Text style={styles.orText}>{t('auth.or')}</Text>
+                    <Text style={styles.orText}>OU ACCÈS VIA</Text>
                     <View style={styles.line} />
                 </View>
 
+                {/* BOUTON GOOGLE */}
                 <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleLogin}>
-                    <Ionicons name="logo-google" size={20} color={theme.colors.text} style={{marginRight: 10}} />
-                    <Text style={styles.googleText}>{t('auth.google')}</Text>
+                    <Ionicons name="logo-google" size={20} color="#fff" />
+                    <Text style={styles.googleText}>GOOGLE LINK</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => {
-                    setIsLogin(!isLogin);
-                    setTermsAccepted(false); // Reset checkbox on switch
-                }} style={styles.switchBtn}>
+                {/* SWITCH MODE */}
+                <TouchableOpacity onPress={toggleMode} style={styles.switchBtn}>
                     <Text style={styles.switchText}>
-                        {isLogin ? t('auth.switch_to_signup') : t('auth.switch_to_login')}
+                        {isLogin ? "Pas encore de clé ? " : "Déjà initié ? "}
+                        <Text style={{ color: '#00f3ff', fontWeight: 'bold' }}>
+                            {isLogin ? "Créer un accès" : "Connexion"}
+                        </Text>
                     </Text>
                 </TouchableOpacity>
-            </View>
 
+            </Animated.View>
+                        {/* --- DISCLAIMER LEGAL & MÉDICAL --- */}
+            <View style={{ marginTop: 30, paddingHorizontal: 20, paddingBottom: 20, alignItems: 'center' }}>
+                
+                {/* Ligne de séparation subtile */}
+                <View style={{ width: 40, height: 2, backgroundColor: colors.textSecondary, opacity: 0.1, marginBottom: 15 }} />
+
+                <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 10, lineHeight: 16 }}>
+                    En continuant, vous acceptez nos{' '}
+                    <Text 
+                        style={{ color: colors.primary, fontWeight: 'bold' }}
+                        onPress={() => router.push('/profile/legal' as any)} // Redirige vers vos mentions légales
+                    >
+                        Conditions Générales
+                    </Text>
+                    .
+                </Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, opacity: 0.6 }}>
+                    <MaterialCommunityIcons name="alert-decagram-outline" size={12} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={{ color: colors.textSecondary, fontSize: 9, fontWeight: 'bold' }}>
+                        AVERTISSEMENT SYSTÈME
+                    </Text>
+                </View>
+
+                <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 9, marginTop: 2, opacity: 0.6, maxWidth: 300 }}>
+                    Nexus est une Intelligence Artificielle d'optimisation. Elle ne remplace en aucun cas un avis médical professionnel. Consultez un médecin avant de commencer un programme.
+                </Text>
+            </View>
+            
+            <View style={{ height: 20 }} />
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#000' },
+  glowBlob: {
+    position: 'absolute',
+    width: width,
+    height: width,
+    borderRadius: width / 2,
+  },
+  content: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 25,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoIcon: {
+    marginBottom: 10,
+    textShadowColor: 'rgba(0, 243, 255, 0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: 2,
+  },
+  subtitle: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 3,
+    marginTop: 5,
+    fontWeight: 'bold',
+  },
+  formContainer: {
+    width: '100%',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 55,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 15,
+  },
+  input: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 15,
+    flexWrap: 'wrap',
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  termsText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+  },
+  authBtn: {
+    height: 55,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+    shadowColor: "#00f3ff",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  authBtnText: {
+    color: '#000', 
+    fontWeight: '900',
+    fontSize: 14,
+    letterSpacing: 1,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 25,
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  orText: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 10,
+    fontWeight: 'bold',
+    marginHorizontal: 15,
+    letterSpacing: 1,
+  },
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 55,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    gap: 10,
+  },
+  googleText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  switchBtn: {
+    marginTop: 30,
+    alignItems: 'center',
+  },
+  switchText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+  },
+});

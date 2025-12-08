@@ -1,68 +1,76 @@
 import { supabase } from './supabase';
 
-// Fonction générique d'envoi
-async function callEdgeFunction(body: any) {
-  // ... (Ton code existant pour callEdgeFunction, pas besoin de le changer s'il marchait)
-  // Mais pour être sûr, je te remets le strict minimum qui marche :
+// Définition des types pour plus de sécurité
+type AIRequestType = 'CHAT' | 'WORKOUT' | 'MEAL' | 'MEAL_PREP';
+
+interface AIRequestPayload {
+  type: AIRequestType;
+  userProfile: any;
+  preferences?: string;     // Pour Workout/Meal
+  userMessage?: string;     // Pour Chat
+  context?: string;         // Pour contextes additionnels
+}
+
+// Fonction générique unifiée
+async function callNeuralCore(payload: AIRequestPayload) {
   try {
-    const { data, error } = await supabase.functions.invoke('generate-plan', {
-      body: { ...body }
+    // On appelle UNIQUEMENT 'supafit-ai'
+    const { data, error } = await supabase.functions.invoke('supafit-ai', {
+      body: payload
     });
-    if (error) throw error;
+
+    if (error) {
+        console.error(`[NEURAL CORE] Error on ${payload.type}:`, error);
+        throw error;
+    }
+    
+    // Si l'IA renvoie une string (cas rare d'erreur mal formatée), on tente de parser
+    if (typeof data === 'string') {
+        try { return JSON.parse(data); } catch { return data; }
+    }
+    
     return data;
-  } catch (e) {
-    console.error("Erreur interne:", e);
-    return null;
+
+  } catch (e: any) {
+    console.error("[NEURAL CORE] System Failure:", e.message);
+    // On propage l'erreur pour que l'UI affiche une alerte
+    throw new Error(e.message || "Erreur de communication avec le noyau IA.");
   }
 }
 
-// 1. CHAT
+// --- FAÇADES (API CLIENT) ---
+
 export async function generateAIResponse(userProfile: any, systemPrompt: string, userMessage: string) {
-  return await callEdgeFunction({
+  // Le Chat attend un format { response: string }
+  return await callNeuralCore({
     type: 'CHAT',
     userProfile,
-    preferences: userMessage,
+    userMessage,
     context: systemPrompt
   });
 }
 
-// 2. WORKOUT (C'est ici qu'était ton erreur)
 export async function generateWorkoutJSON(userProfile: any, focus: string) {
-  try {
-    if (!userProfile) throw new Error("Profil manquant");
-
-    const { data, error } = await supabase.functions.invoke('generate-plan', {
-      body: { 
-        type: 'WORKOUT',
-        userProfile: userProfile,
-        preferences: focus 
-      }
-    });
-
-    if (error) throw error;
-    return data;
-    
-  } catch (e) {
-    console.error("Erreur Appel Edge:", e);
-    // CORRECTION ICI : (e as any)
-    return { error: (e as any).message || "Erreur inconnue" };
-  }
+  // Le Workout attend un JSON complexe
+  return await callNeuralCore({
+    type: 'WORKOUT',
+    userProfile,
+    preferences: focus
+  });
 }
 
-// 3. MEAL
 export async function generateMealPlanJSON(userProfile: any, preferences: string) {
-  return await callEdgeFunction({
+  return await callNeuralCore({
     type: 'MEAL',
     userProfile,
     preferences
   });
 }
 
-// 4. RECIPE
-export async function generateMealPrepIdeas(userProfile: any, preferences: string) {
-  return await callEdgeFunction({
-    type: 'RECIPE',
+export async function generateMealPrepIdeas(userProfile: any, ingredients: string) {
+  return await callNeuralCore({
+    type: 'MEAL_PREP',
     userProfile,
-    preferences
+    preferences: ingredients // On passe les ingrédients comme "préférences"
   });
 }

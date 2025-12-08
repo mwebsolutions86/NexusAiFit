@@ -4,35 +4,36 @@ import { supabase } from '../lib/supabase';
 export const useActivePlans = (userId: string | undefined) => {
   return useQuery({
     queryKey: ['activePlans', userId],
-    enabled: !!userId,
     queryFn: async () => {
-      // ARCHITECTURE V2 : On cible la table unifiée 'plans'
-      // On récupère tous les plans actifs de l'utilisateur en une seule requête
-      const { data, error } = await supabase
+      if (!userId) return null;
+
+      // 1. Récupérer le plan Sport Actif
+      const { data: workoutData } = await supabase
         .from('plans')
-        .select('type, content')
+        .select('content')
         .eq('user_id', userId)
-        .eq('is_active', true);
+        .eq('type', 'workout')
+        .eq('is_active', true)
+        .maybeSingle();
 
-      if (error) {
-        console.error('Erreur de synchronisation Dashboard:', error);
-        return { workoutPlan: null, mealPlan: null };
-      }
+      // 2. Récupérer le plan Nutrition Actif (CORRECTION ICI)
+      // On cherche soit 'meal', soit 'nutrition', soit 'MEAL' pour être sûr de le trouver
+      const { data: mealData } = await supabase
+        .from('plans')
+        .select('content')
+        .eq('user_id', userId)
+        .in('type', ['meal', 'nutrition', 'MEAL']) 
+        .eq('is_active', true)
+        .maybeSingle();
 
-      // Filtrage en mémoire (Extrêmement rapide)
-      // On cherche le plan de type 'workout'
-      const workoutRow = data.find((p) => p.type === 'workout');
-      
-      // On cherche le plan de type 'nutrition' ou 'meal'
-      const mealRow = data.find((p) => p.type === 'nutrition' || p.type === 'meal');
+      // DEBUG : Pour voir si on a trouvé quelque chose cette fois
+      console.log(`📥 [ActivePlans] Workout: ${!!workoutData} | Meal: ${!!mealData}`);
 
       return {
-        // On retourne l'objet JSON complet stocké dans la colonne 'content'
-        workoutPlan: workoutRow?.content || null,
-        mealPlan: mealRow?.content || null,
+        workoutPlan: workoutData ? workoutData.content : null,
+        mealPlan: mealData ? mealData.content : null,
       };
     },
-    // Optionnel : On garde les données en cache 5 minutes pour éviter trop d'appels
-    staleTime: 1000 * 60 * 5, 
+    enabled: !!userId,
   });
 };

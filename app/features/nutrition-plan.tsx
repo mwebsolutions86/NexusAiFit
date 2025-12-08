@@ -15,8 +15,14 @@ export default function NutritionPlanScreen() {
   const theme = useTheme();
   const router = useRouter();
   
-  const { data: userProfile } = useUserProfile(); 
-  const { activePlan, generatePlan, isGenerating } = useAINutrition();
+  // --- CORRECTION 1 : Destructuration correcte du profil ---
+  const { userProfile } = useUserProfile(); 
+  
+  // --- CORRECTION 2 : Noms corrects du hook useAINutrition ---
+  const { mealPlan, generateNutrition, isGenerating } = useAINutrition();
+
+  // Alias pour garder la logique du composant intacte sans tout renommer
+  const activePlan = mealPlan;
 
   const [userFocus, setUserFocus] = useState(''); 
   const [activeDayIndex, setActiveDayIndex] = useState(0);
@@ -34,10 +40,12 @@ export default function NutritionPlanScreen() {
     }
 
     try {
-      await generatePlan({
-        userContext: userFocus,
+      // --- CORRECTION 3 : Arguments corrects pour la mutation ---
+      await generateNutrition({
+        preferences: userFocus,
         userProfile: userProfile || {}
       });
+      
       setUserFocus('');
       Alert.alert("Succès", "Plan nutritionnel généré et activé.");
     } catch (e: any) {
@@ -56,7 +64,7 @@ export default function NutritionPlanScreen() {
         );
       }
       else {
-        Alert.alert("Erreur", "Le Nutritionniste IA ne répond pas. " + e.message);
+        Alert.alert("Erreur", "Le Nutritionniste IA ne répond pas. " + (e.message || ""));
       }
     }
   };
@@ -119,17 +127,16 @@ export default function NutritionPlanScreen() {
 
     const currentDay = content.days[activeDayIndex] || content.days[0];
     
-    // --- CORRECTIF DU CRASH ---
     // On s'assure que meals est toujours un tableau, même vide
     const meals = currentDay.meals || [];
 
     // Calcul rapide des macros du jour (si dispo)
     let totalCals = 0, totalProt = 0;
     
-    // On utilise la variable sécurisée 'meals' et pas currentDay.meals
-    meals.forEach(m => {
+    // --- CORRECTION 4 : Typage explicite (any) pour éviter les erreurs implicites ---
+    meals.forEach((m: any) => {
         if (m.items && Array.isArray(m.items)) {
-            m.items.forEach(i => {
+            m.items.forEach((i: any) => {
                 totalCals += i.calories || 0;
                 totalProt += i.protein || 0;
             });

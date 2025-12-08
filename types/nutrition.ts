@@ -1,20 +1,25 @@
-// Structure d'un aliment/repas
+// types/nutrition.ts
+
+// --- PLAN NUTRITIONNEL (Table: meal_plans) ---
+
 export interface MealItem {
   name: string;
   calories: number;
   protein: number;
-  carbs: number;
-  fat: number;
+  carbs?: number;
+  fat?: number;
   notes?: string;
+  ingredients?: string;
+}
+
+export interface Meal {
+  name: string;
+  items: MealItem[];
 }
 
 export interface NutritionDay {
-  day: string; // "Jour 1", "Lundi"...
-  meals: {
-    name: string; // "Petit Déjeuner", "Déjeuner"...
-    items: MealItem[];
-  }[];
-  total_calories?: number;
+  day: string;
+  meals: Meal[];
 }
 
 export interface NutritionPlanContent {
@@ -22,43 +27,43 @@ export interface NutritionPlanContent {
   days: NutritionDay[];
 }
 
-// Pour la DB (similaire à PlanDB workout, mais typé nutrition)
-export interface NutritionPlanDB {
+export interface MealPlanDB {
   id: string;
   user_id: string;
+  title: string;
   content: NutritionPlanContent;
-  type: 'nutrition';
-  created_at: string;
   is_active: boolean;
+  week_number: number;
+  created_at: string;
 }
 
-// ... (Vos interfaces existantes NutritionPlanContent, MealItem, etc.)
+// --- SUIVI JOURNALIER (Table: nutrition_logs) ---
 
-// Structure d'un aliment consommé (Snapshot)
-export interface EatenItem {
+// Structure d'un item consommé (Snapshot)
+// On utilise 'ConsumedItem' partout pour être cohérent avec les mutations
+export interface ConsumedItem {
   name: string;
+  mealName: string; // "Petit Déjeuner", "Collation"...
   calories: number;
   protein: number;
-  mealName: string; // "Petit Déjeuner", "Collation"...
-  eatenAt: string; // ISO String de l'heure
+  eatenAt: string; // ISO String
 }
 
-// Données envoyées au Logger
+// ✅ L'INTERFACE QUI MANQUAIT (Pour le Logger)
 export interface NutritionLogData {
   logDate: string; // YYYY-MM-DD
-  mealsStatus: EatenItem[]; // Liste complète des aliments mangés
+  mealsStatus: ConsumedItem[]; // Liste complète des aliments mangés
   totalCalories: number;
   totalProtein: number;
-  waterIntake?: number; // Optionnel si géré ici
   note?: string;
 }
 
-// Structure de la table 'nutrition_logs'
+// Structure de la table 'nutrition_logs' dans Supabase
 export interface NutritionLogDB {
   id: string;
   user_id: string;
   log_date: string;
-  meals_status: EatenItem[]; 
+  meals_status: ConsumedItem[]; // JSONB
   total_calories: number;
   total_protein: number;
   daily_note?: string;

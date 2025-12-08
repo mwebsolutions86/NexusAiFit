@@ -1,196 +1,184 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, Platform, Dimensions, ActivityIndicator } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, RefreshControl, Platform, Dimensions, Alert, LayoutAnimation, UIManager } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTranslation } from 'react-i18next';
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../lib/theme';
-
-// --- IMPORTS ARCHITECTURE V2 ---
 import { ScreenLayout } from '../../components/ui/ScreenLayout';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { NeonButton } from '../../components/ui/NeonButton';
 import { GlassButton } from '../../components/ui/GlassButton';
+
+// Hooks d'Architecture
 import { useUserProfile } from '../../hooks/useUserProfile';
-import { useAINutrition } from '../../hooks/useAINutrition'; // <--- LE CERVEAU V2
+import { useAINutrition } from '../../hooks/useAINutrition';
+import { useNutritionLog } from '../../hooks/useNutritionLog';
+import { useNutritionMutations } from '../../hooks/useNutritionMutations';
+import FoodJournal from '../../app/features/food-journal'; 
 
 const { width } = Dimensions.get('window');
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const getTodayIndex = () => {
+  const day = new Date().getDay(); 
+  return (day + 6) % 7;
+};
+
+const MacroBar = ({ label, value, total, color, delay = 0 }: any) => {
+  const { colors } = useTheme();
+  const width = useSharedValue(0);
+  const safeTotal = total || 1; 
+  const percent = Math.min((value / safeTotal) * 100, 100);
+
+  React.useEffect(() => {
+    width.value = withTiming(percent, { duration: 1000 });
+  }, [percent]);
+
+  const animatedStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }));
+
+  return (
+    <Animated.View entering={FadeInDown.delay(delay).springify()} style={styles.macroContainer}>
+      <View style={styles.macroHeader}>
+        <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>{label}</Text>
+        <Text style={[styles.macroValue, { color: colors.text }]}>
+            {Math.round(value)}g <Text style={{fontSize:10, color:colors.textSecondary}}>/ {Math.round(safeTotal)}g</Text>
+        </Text>
+      </View>
+      <View style={[styles.macroTrack, { backgroundColor: colors.glass }]}>
+        <Animated.View style={[styles.macroFill, { backgroundColor: color }, animatedStyle]} />
+      </View>
+    </Animated.View>
+  );
+};
 
 export default function NutritionScreen() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { t } = useTranslation();
-  const queryClient = useQueryClient();
-
-  const [userId, setUserId] = useState<string | undefined>();
+  
+  const today = new Date().toISOString().split('T')[0];
   const [preferences, setPreferences] = useState('');
   
-  // --- LOGIQUE BACKEND CORRIGÉE ---
   const { userProfile } = useUserProfile();
+  const { mealPlan, generateNutrition, isGenerating, isLoadingPlan } = useAINutrition();
+  const { data: log, isLoading: isLogLoading, refetch } = useNutritionLog(today);
+  const { toggleItem } = useNutritionMutations(today);
 
-  // On récupère le hook V2
-  const { 
-    mealPlan: rawPlan, 
-    generateNutrition, // La fonction qu'on a fixée
-    loading: isGenerating 
-  } = useAINutrition();
+  const todayIndex = getTodayIndex();
+  const [activeTab, setActiveTab] = useState(todayIndex);
+  const [showJournal, setShowJournal] = useState(false);
 
-  // ADAPTATEUR: L'UI attend 'activePlan.content', on adapte la structure
-  const activePlan = rawPlan ? { content: rawPlan } : null;
+  useEffect(() => {}, [today]);
 
-  // Gestion des jours
-  const getTodayIndex = () => (new Date().getDay() + 6) % 7; // Lundi = 0
-  const [activeTab, setActiveTab] = useState(getTodayIndex());
+  // --- CALCULS ---
 
-  useEffect(() => { supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user.id)) }, []);
-
-  // 1. Récupération du Log Quotidien (Checklist)
-  const { data: dailyLog } = useQuery({
-    queryKey: ['dailyNutritionLog', userId, new Date().toISOString().split('T')[0]],
-    enabled: !!userId && !!activePlan,
-    queryFn: async () => {
-        const today = new Date().toISOString().split('T')[0];
-        const { data } = await supabase
-            .from('nutrition_logs')
-            .select('meals_status, total_calories, total_protein')
-            .eq('user_id', userId)
-            .eq('log_date', today)
-            .maybeSingle();
-        return data || { meals_status: [], total_calories: 0, total_protein: 0 };
+  const consumedMap = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    if (log?.meals_status) {
+        log.meals_status.forEach(item => {
+            map[`${item.mealName}_${item.name}`] = true;
+        });
     }
-  });
+    return map;
+  }, [log]);
 
-  // Transformation du tableau d'items mangés en objet pour accès rapide
-  const consumedMeals = React.useMemo(() => {
-      const map: Record<string, boolean> = {};
-      if (dailyLog?.meals_status && Array.isArray(dailyLog.meals_status)) {
-          dailyLog.meals_status.forEach((item: any) => {
-              // Clé composite : NomRepas_NomItem
-              const key = `${item.mealName}_${item.name}`;
-              map[key] = true;
-          });
-      }
-      return map;
-  }, [dailyLog]);
-
-  const dailyStats = { calories: dailyLog?.total_calories || 0, protein: dailyLog?.total_protein || 0 };
-
-  // 2. Mutation pour cocher un repas (Logique V2 Snapshot)
-  const toggleMealMutation = useMutation({
-    mutationFn: async ({ mealName, item }: any) => {
-        if (!userId) return;
-        
-        // On reconstruit la liste complète des items mangés
-        const currentList = Array.isArray(dailyLog?.meals_status) ? [...dailyLog.meals_status] : [];
-        const key = `${mealName}_${item.name}`;
-        const existsIndex = currentList.findIndex((i: any) => `${i.mealName}_${i.name}` === key);
-        
-        let newList;
-        let newCalories = dailyStats.calories;
-        let newProtein = dailyStats.protein;
-
-        if (existsIndex >= 0) {
-            // RETIRER
-            currentList.splice(existsIndex, 1);
-            newList = currentList;
-            newCalories -= (item.calories || 0);
-            newProtein -= (item.protein || 0);
-        } else {
-            // AJOUTER
-            newList = [...currentList, {
-                name: item.name,
-                calories: item.calories,
-                protein: item.protein,
-                mealName: mealName,
-                eatenAt: new Date().toISOString()
-            }];
-            newCalories += (item.calories || 0);
-            newProtein += (item.protein || 0);
-        }
-
-        if (Platform.OS !== 'web') Haptics.selectionAsync();
-
-        // Sauvegarde
-        const today = new Date().toISOString().split('T')[0];
-        const { error } = await supabase.from('nutrition_logs').upsert({
-            user_id: userId,
-            log_date: today,
-            meals_status: newList,
-            total_calories: Math.max(0, newCalories),
-            total_protein: Math.max(0, newProtein)
-        }, { onConflict: 'user_id, log_date' });
-
-        if (error) throw error;
-    },
-    onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['dailyNutritionLog'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
-    }
-  });
-
-  // 3. Génération IA (Via le Hook V2)
-  const handleGenerate = async () => {
-    if (!userId) return;
-    
-    // SÉCURITÉ : Profil requis
-    if (!userProfile) {
-        Alert.alert("Profil manquant", "Veuillez patienter.");
-        return;
-    }
-
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    try {
-        const context = preferences.trim() || `Objectif: ${userProfile?.goal || 'Santé'}`;
-        
-        // APPEL CORRIGÉ: On passe userProfile et le context
-        await generateNutrition(userProfile, context);
-
-        setPreferences('');
-        Alert.alert(t('nutrition.alert_title') || "Succès", t('nutrition.alert_msg') || "Nouveau plan nutritionnel activé !");
-        
-    } catch (e: any) {
-        if (e.message === "FREE_LIMIT_REACHED") {
-             Alert.alert("Limite Atteinte", "Passez Premium pour générer plus de plans.");
-        } else if (e.message === "FREE_PLAN_ACTIVE") {
-             Alert.alert("Plan Actif", "Terminez votre plan actuel ou passez Premium.");
-        } else {
-             Alert.alert("Erreur", e.message);
-        }
-    }
+  const dailyStats = {
+      cals: log?.total_calories || 0,
+      prot: log?.total_protein || 0
   };
 
-  const calculateDayTarget = (dayIndex: number) => {
-      // Sécurité : structure du plan
-      if (!activePlan?.content?.days) return 2000;
-      const day = activePlan.content.days[dayIndex] || activePlan.content.days[0];
+  // ✅ CORRECTION TS : "as any" permet d'accéder à .days sans erreur
+  const dayTarget = useMemo(() => {
+      const content = (mealPlan?.content || mealPlan) as any;
       
-      // Calculer la somme des items
+      if (!content || !content.days || !Array.isArray(content.days)) return 2500;
+
+      const safeIndex = activeTab % content.days.length;
+      const day = content.days[safeIndex];
+      
       let total = 0;
-      day.meals?.forEach((m: any) => {
-          if (m.items) m.items.forEach((i: any) => total += (i.calories || 0));
-          else if (m.calories) total += m.calories;
-      });
-      return total > 0 ? total : 2000;
+      if (day && day.meals) {
+        day.meals.forEach((m: any) => {
+            if (m.items && Array.isArray(m.items)) {
+                m.items.forEach((i: any) => {
+                    const cals = parseInt(i.calories, 10);
+                    if (!isNaN(cals)) total += cals;
+                });
+            }
+        });
+      }
+      return total > 0 ? total : 2500;
+  }, [mealPlan, activeTab]);
+
+  const journalCount = log?.meals_status ? log.meals_status.length : 0;
+
+  // --- HANDLERS ---
+
+  const handleGenerate = async () => {
+      if (!userProfile) return;
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      
+      try {
+          const context = preferences.trim() || `Objectif: ${userProfile.goal}`;
+          await generateNutrition({ userProfile, preferences: context });
+          setPreferences('');
+      } catch (e: any) {
+          if (e.message.includes("QUOTA_EXCEEDED")) {
+            Alert.alert(
+                "Limite Atteinte 🔒",
+                "Quota de génération hebdomadaire atteint.\nPassez ELITE pour débloquer 7 plans/semaine.",
+                [
+                    { text: "Annuler", style: "cancel" },
+                    { text: "Devenir Elite", onPress: () => router.push('/subscription') }
+                ]
+            );
+          } else {
+            Alert.alert("Erreur", e.message);
+          }
+      }
   };
 
-  // --- RENDERS (INCHANGÉS) ---
+  const onRefresh = () => {
+      if (Platform.OS !== 'web') Haptics.selectionAsync();
+      refetch();
+  };
+
+  const handleMealPress = (item: any, mealName: string, isEditable: boolean) => {
+      if (!isEditable) {
+          if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          Alert.alert("Mode Consultation", "Vous ne pouvez valider que les repas d'aujourd'hui.");
+          return;
+      }
+      toggleItem.mutate({ 
+          item, 
+          mealName: mealName, 
+          currentLog: log ?? null
+      });
+  };
+
+  const toggleJournalDrawer = () => {
+      if (Platform.OS !== 'web') Haptics.selectionAsync();
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setShowJournal(!showJournal);
+  };
+
+  // --- RENDERERS ---
 
   const renderGenerator = () => (
     <GlassCard style={styles.centerContent}>
         <MaterialCommunityIcons name="food-apple" size={48} color={colors.success} style={{marginBottom: 15}} />
-        <Text style={[styles.title, {color: colors.text}]}>{t('nutrition.ia_title') || "GÉNÉRATEUR DE PLAN"}</Text>
-        <Text style={[styles.desc, {color: colors.textSecondary}]}>{t('nutrition.ia_desc') || "Crée une diète sur mesure en quelques secondes."}</Text>
+        <Text style={[styles.title, {color: colors.text}]}>GÉNÉRATEUR IA</Text>
+        <Text style={[styles.desc, {color: colors.textSecondary}]}>Créez votre plan nutritionnel tactique sur mesure.</Text>
         
         <View style={styles.inputContainer}>
-            <Text style={[styles.label, {color: colors.success}]}>{t('nutrition.pref_label') || "PRÉFÉRENCES"}</Text>
+            <Text style={[styles.label, {color: colors.success}]}>PRÉFÉRENCES (Optionnel)</Text>
             <TextInput 
                 style={[styles.input, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
-                placeholder={t('nutrition.pref_ph') || "Ex: Sans gluten, Budget étudiant..."}
+                placeholder="Ex: Keto, Jeûne intermittent, Vegan..."
                 placeholderTextColor={colors.textSecondary}
                 value={preferences}
                 onChangeText={setPreferences}
@@ -198,163 +186,252 @@ export default function NutritionScreen() {
             />
         </View>
         
-        <NeonButton 
-            label={t('nutrition.btn_generate') || "GÉNÉRER"}
-            onPress={handleGenerate}
-            loading={isGenerating}
-            icon="brain"
-        />
+        <NeonButton label="INITIALISER LE PLAN" onPress={handleGenerate} loading={isGenerating} icon="brain" />
     </GlassCard>
   );
 
   const renderPlan = () => {
-    // Sécurité accès contenu
-    const content = activePlan?.content;
-    if (!content?.days) return renderGenerator(); // Fallback si plan corrompu
+      // ✅ CORRECTION TS ICI AUSSI
+      const content = (mealPlan?.content || mealPlan) as any;
+      
+      if (!content?.days) return renderGenerator();
 
-    const safeIndex = Math.min(activeTab, (content.days.length || 1) - 1);
-    const day = content.days[safeIndex];
-    if (!day) return null;
+      const safeIndex = activeTab % content.days.length;
+      const day = content.days[safeIndex];
+      const isEditable = activeTab === todayIndex;
 
-    const dayTarget = calculateDayTarget(safeIndex);
-    const progress = Math.min(dailyStats.calories / dayTarget, 1);
-    const todayIndex = getTodayIndex();
-
-    return (
-        <View>
-            <View style={styles.planHeader}>
-                <View>
-                    <Text style={[styles.planTitle, {color: colors.text}]}>{content.title}</Text>
-                    <View style={{flexDirection:'row', gap:15, marginTop:5}}>
-                        <Text style={[styles.statsText, {color: colors.textSecondary}]}>
-                            {t('nutrition.target') || "Cible"}: <Text style={{color: colors.text, fontWeight:'900'}}>{dayTarget}</Text>
-                        </Text>
-                        <Text style={[styles.statsText, {color: colors.success}]}>
-                            {t('nutrition.consumed') || "Fait"}: {dailyStats.calories}
-                        </Text>
-                    </View>
-                </View>
-                <GlassButton icon="refresh" onPress={handleGenerate} size={20} />
-            </View>
-
-            {/* Progress Bar */}
-            <View style={[styles.progressBg, {backgroundColor: colors.border}]}>
-                <LinearGradient 
-                    colors={[colors.success, '#34d399']} 
-                    start={{x:0, y:0}} end={{x:1, y:0}} 
-                    style={[styles.progressFill, { width: `${progress * 100}%` }]} 
-                />
-            </View>
-
-            {/* Day Tabs */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 10, paddingVertical: 20}}>
-                {content.days.map((d: any, i: number) => {
-                    const isToday = i === todayIndex;
-                    const isActive = activeTab === i;
-                    return (
-                    <TouchableOpacity 
-                        key={i} 
-                        style={[
-                            styles.dayTab, 
-                            { backgroundColor: isActive ? colors.success : colors.glass, borderColor: isActive ? colors.success : colors.border },
-                            isToday && !isActive && { borderColor: colors.success, borderWidth: 1 }
-                        ]}
-                        onPress={() => { if (Platform.OS !== 'web') Haptics.selectionAsync(); setActiveTab(i); }}
-                    >
-                        <Text style={[styles.dayText, { color: isActive ? '#fff' : colors.textSecondary }]}>
-                            {d.day ? d.day.slice(0,3).toUpperCase() : `J${i+1}`}
-                            {isToday && " •"}
-                        </Text>
-                    </TouchableOpacity>
-                )})}
-            </ScrollView>
-
-            {/* Meal List */}
-            {day.meals?.map((meal: any, index: number) => (
-                <View key={index} style={{marginBottom: 20}}>
-                    <Text style={{color: colors.success, fontWeight:'bold', marginBottom:10, textTransform:'uppercase', letterSpacing:1}}>{meal.name}</Text>
-                    
-                    {/* Items du repas */}
-                    {meal.items?.map((item: any, i: number) => {
-                        const key = `${meal.name}_${item.name}`;
-                        const isChecked = !!consumedMeals[key];
-                        
-                        return (
-                            <GlassCard 
-                                key={i} 
-                                style={[styles.mealCard, isChecked && { backgroundColor: colors.success + '10', borderColor: colors.success }]}
-                                onPress={() => toggleMealMutation.mutate({ mealName: meal.name, item })}
+      return (
+          <View>
+              {/* Header avec Bouton Regen */}
+              <View style={styles.planHeader}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap: 8, paddingRight: 20}}>
+                      {content.days.map((d: any, i: number) => {
+                          const isActive = activeTab === i;
+                          const isTodayTab = i === todayIndex;
+                          return (
+                            <TouchableOpacity 
+                                key={i}
+                                onPress={() => { if (Platform.OS !== 'web') Haptics.selectionAsync(); setActiveTab(i); }}
+                                style={[
+                                    styles.dayTab, 
+                                    { 
+                                        backgroundColor: isActive ? colors.success : 'transparent',
+                                        borderColor: isActive ? colors.success : (isTodayTab ? colors.primary : colors.border),
+                                        borderWidth: isTodayTab ? 1 : 1
+                                    }
+                                ]}
                             >
-                                <View style={[
-                                    styles.checkbox, 
-                                    { borderColor: isChecked ? colors.success : colors.textSecondary, backgroundColor: isChecked ? colors.success : 'transparent' }
-                                ]}>
-                                    {isChecked && <Ionicons name="checkmark" size={12} color="#fff" />}
-                                </View>
-
-                                <View style={{flex:1}}>
-                                    <Text style={[styles.mealName, {color: colors.text}, isChecked && {textDecorationLine: 'line-through', color: colors.textSecondary}]}>
-                                        {item.name}
+                                <View style={{flexDirection:'row', alignItems:'center', gap: 4}}>
+                                    <Text style={{color: isActive ? '#fff' : colors.textSecondary, fontWeight:'bold', fontSize:12}}>
+                                        {d.day ? d.day.slice(0,3).toUpperCase() : `J${i+1}`}
                                     </Text>
-                                    <View style={{flexDirection:'row', gap:10}}>
-                                        <Text style={[styles.macroText, {color: colors.textSecondary}]}>🔥 {item.calories}</Text>
-                                        <Text style={[styles.macroText, {color: colors.textSecondary}]}>🥩 {item.protein}g</Text>
-                                    </View>
+                                    {isTodayTab && !isActive && <View style={{width:4, height:4, borderRadius:2, backgroundColor: colors.primary}} />}
                                 </View>
-                            </GlassCard>
-                        );
-                    })}
-                </View>
-            ))}
+                            </TouchableOpacity>
+                          )
+                      })}
+                  </ScrollView>
+                  
+                  <GlassButton 
+                    icon="refresh" 
+                    onPress={() => { 
+                        Alert.alert("Nouveau Menu ?", "Générer un nouveau plan consommera un crédit.", [{text:"Annuler"}, {text:"Générer", onPress: handleGenerate}]);
+                    }} 
+                    size={20} 
+                  />
+              </View>
 
-            <View style={{height: 100}} />
-        </View>
-    );
+              {!isEditable && (
+                  <View style={[styles.readOnlyBanner, { backgroundColor: colors.textSecondary + '20', marginHorizontal: 20 }]}>
+                      <Ionicons name="eye-outline" size={14} color={colors.textSecondary} />
+                      <Text style={{color: colors.textSecondary, fontSize: 10, marginLeft: 5}}>MODE LECTURE SEULE</Text>
+                  </View>
+              )}
+
+              {/* CARROUSEL REPAS */}
+              <View style={{ marginBottom: 10 }}>
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false} 
+                    contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20, gap: 15 }}
+                    decelerationRate="fast"
+                    snapToInterval={width * 0.85 + 15}
+                  >
+                      {day.meals && day.meals.map((meal: any, idx: number) => {
+                          const mealCals = meal.items ? meal.items.reduce((acc: number, i: any) => acc + (parseInt(i.calories, 10) || 0), 0) : 0;
+
+                          return (
+                              <GlassCard 
+                                key={idx} 
+                                style={{ width: width * 0.85, padding: 0, overflow: 'hidden' }}
+                                intensity={30}
+                              >
+                                  <View style={[styles.mealHeader, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
+                                      <Text style={[styles.mealTitle, { color: colors.text }]}>{meal.name.toUpperCase()}</Text>
+                                      <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 10 }}>{mealCals} KCAL</Text>
+                                  </View>
+
+                                  <View style={{ padding: 15, paddingTop: 5 }}>
+                                      {meal.items && meal.items.map((item: any, i: number) => {
+                                          const key = `${meal.name}_${item.name}`;
+                                          const isChecked = !!consumedMap[key];
+                                          
+                                          return (
+                                              <TouchableOpacity 
+                                                  key={i}
+                                                  style={[styles.foodRow, { borderBottomColor: colors.border, borderBottomWidth: i === meal.items.length - 1 ? 0 : 1 }]}
+                                                  onPress={() => handleMealPress(item, meal.name, isEditable)}
+                                                  activeOpacity={0.7}
+                                              >
+                                                  <View style={{ flex: 1 }}>
+                                                      <Text style={[styles.foodName, { color: colors.text, textDecorationLine: isChecked ? 'line-through' : 'none', opacity: isChecked ? 0.6 : 1 }]}>
+                                                          {item.name}
+                                                      </Text>
+                                                      <Text style={{ fontSize: 10, color: colors.textSecondary }}>
+                                                          {item.calories} kcal • {item.protein}g prot {item.notes ? `• ${item.notes}` : ''}
+                                                      </Text>
+                                                  </View>
+
+                                                  <View style={[styles.checkbox, { 
+                                                      borderColor: isChecked ? colors.success : (isEditable ? colors.border : colors.textSecondary),
+                                                      backgroundColor: isChecked ? colors.success : 'transparent',
+                                                      opacity: isEditable ? 1 : 0.5
+                                                  }]}>
+                                                      {isChecked && <Ionicons name="checkmark" size={12} color="#000" />}
+                                                      {!isChecked && !isEditable && <Ionicons name="lock-closed" size={10} color={colors.textSecondary} />}
+                                                  </View>
+                                              </TouchableOpacity>
+                                          )
+                                      })}
+                                  </View>
+                              </GlassCard>
+                          )
+                      })}
+                  </ScrollView>
+                  
+                  {day.meals && day.meals.length > 1 && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: -10, opacity: 0.6 }}>
+                          <Text style={{ color: colors.textSecondary, fontSize: 10, marginRight: 5 }}>GLISSER POUR VOIR</Text>
+                          <Ionicons name="arrow-forward" size={12} color={colors.textSecondary} />
+                      </View>
+                  )}
+              </View>
+          </View>
+      );
   };
 
   return (
     <ScreenLayout>
         <View style={styles.header}>
-            {/* Si on vient du Dashboard, pas de back button nécessaire, c'est un Tab */}
-            <Text style={[styles.headerTitle, {color: colors.text}]}>{t('nutrition.title') || "NUTRITION"}</Text>
-            {/* Petit bouton shopping pour aller vers la liste */}
+            <View>
+                <Text style={[styles.headerTitle, { color: colors.text }]}>CARBURANT</Text>
+                <Text style={[styles.headerDate, { color: colors.primary }]}>
+                    {activeTab === todayIndex ? "AUJOURD'HUI" : `JOUR ${activeTab + 1}`}
+                </Text>
+            </View>
             <TouchableOpacity onPress={() => router.push('/features/shopping' as any)}>
                 <MaterialCommunityIcons name="cart-outline" size={24} color={colors.text} />
             </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-            {activePlan ? renderPlan() : renderGenerator()}
+        <ScrollView 
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 120 }}
+            refreshControl={<RefreshControl refreshing={isLoadingPlan || isLogLoading} onRefresh={onRefresh} tintColor={colors.primary} />}
+            showsVerticalScrollIndicator={false}
+        >
+            {activeTab === todayIndex && (
+                <GlassCard style={styles.dashboardCard} intensity={20}>
+                    <View style={styles.calsRow}>
+                        <View>
+                            <Text style={[styles.calsValue, { color: colors.text }]}>{Math.round(dailyStats.cals)}</Text>
+                            <Text style={[styles.calsLabel, { color: colors.textSecondary }]}>KCAL CONSOMMÉES</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={[styles.calsTarget, { color: colors.textSecondary }]}>CIBLE: {dayTarget}</Text>
+                            <Ionicons name="flame" size={24} color={colors.warning} />
+                        </View>
+                    </View>
+                    <View style={styles.divider} />
+                    <MacroBar label="PROGRÈS CALORIQUE" value={dailyStats.cals} total={dayTarget} color={colors.warning} delay={100} />
+                    <MacroBar label="PROTÉINES" value={dailyStats.prot} total={180} color={colors.primary} delay={200} />
+                </GlassCard>
+            )}
+
+            <View style={{ marginBottom: 10 }}>
+                {mealPlan ? renderPlan() : renderGenerator()}
+            </View>
+
+            {/* --- TIROIR JOURNAL TACTIQUE --- */}
+            {activeTab === todayIndex && (
+                <View style={{ paddingHorizontal: 20 }}>
+                     <TouchableOpacity 
+                        onPress={toggleJournalDrawer} 
+                        activeOpacity={0.8}
+                        style={{ marginBottom: 10 }}
+                     >
+                        <GlassCard style={[styles.drawerHeader, { borderColor: colors.primary + '30' }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                <MaterialCommunityIcons name="history" size={20} color={colors.primary} />
+                                <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 0 }]}>
+                                    HISTORIQUE ({journalCount})
+                                </Text>
+                            </View>
+                            <Ionicons name={showJournal ? "chevron-up" : "chevron-down"} size={20} color={colors.textSecondary} />
+                        </GlassCard>
+                     </TouchableOpacity>
+
+                     {showJournal && (
+                         <Animated.View entering={FadeInDown} style={{ marginTop: 5 }}>
+                             <FoodJournal date={today} />
+                         </Animated.View>
+                     )}
+                </View>
+            )}
+
         </ScrollView>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 10 },
-    headerTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 2 },
-    content: { padding: 20 },
-    
-    centerContent: { alignItems: 'center', padding: 30 },
-    title: { fontSize: 20, fontWeight: '900', marginBottom: 10 },
-    desc: { textAlign: 'center', marginBottom: 25, lineHeight: 20 },
-    inputContainer: { width: '100%', marginBottom: 20 },
-    label: { fontSize: 10, fontWeight: 'bold', marginBottom: 8, marginLeft: 4 },
-    input: { borderRadius: 12, borderWidth: 1, padding: 15, minHeight: 80, textAlignVertical: 'top' },
-    
-    planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 15 },
-    planTitle: { fontSize: 22, fontWeight: '900', fontStyle: 'italic', flex: 1 },
-    statsText: { fontSize: 10, fontWeight: 'bold' },
-    
-    progressBg: { height: 6, borderRadius: 3, overflow: 'hidden' },
-    progressFill: { height: '100%', borderRadius: 3 },
-    
-    dayTab: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    dayText: { fontWeight: 'bold', fontSize: 12 },
-    
-    mealCard: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 8 },
-    mealName: { fontSize: 14, fontWeight: 'bold', marginBottom: 4 },
-    macroText: { fontSize: 10, fontWeight: 'bold' },
-    
-    checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 2, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 10 },
+  headerTitle: { fontSize: 28, fontWeight: '900', letterSpacing: -1, fontStyle: 'italic' },
+  headerDate: { fontSize: 10, fontWeight: 'bold', letterSpacing: 2, marginTop: 4 },
+  
+  dashboardCard: { margin: 20, marginTop: 10, padding: 24, borderRadius: 30 },
+  calsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+  calsValue: { fontSize: 42, fontWeight: '900', letterSpacing: -2 },
+  calsLabel: { fontSize: 9, fontWeight: 'bold', letterSpacing: 2, marginTop: 2 },
+  calsTarget: { fontSize: 12, fontWeight: '600', marginBottom: 6, opacity: 0.8 },
+  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginBottom: 20 },
+
+  macroContainer: { marginBottom: 15 },
+  macroHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  macroLabel: { fontSize: 9, fontWeight: 'bold', letterSpacing: 1 },
+  macroValue: { fontSize: 12, fontWeight: 'bold' },
+  macroTrack: { height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.2)' },
+  macroFill: { height: '100%', borderRadius: 4 },
+
+  centerContent: { alignItems: 'center', padding: 30, margin: 20 },
+  title: { fontSize: 20, fontWeight: '900', marginBottom: 10 },
+  desc: { textAlign: 'center', marginBottom: 25, lineHeight: 20, fontSize: 13 },
+  inputContainer: { width: '100%', marginBottom: 20 },
+  label: { fontSize: 10, fontWeight: 'bold', marginBottom: 8, marginLeft: 4 },
+  input: { borderRadius: 12, borderWidth: 1, padding: 15, minHeight: 80, textAlignVertical: 'top' },
+
+  planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
+  dayTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, borderWidth: 1, marginRight: 5 },
+  
+  mealHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
+  mealTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+  
+  foodRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
+  foodName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  checkbox: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
+  itemName: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  
+  drawerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, borderRadius: 16, borderWidth: 1 },
+  sectionTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
+  readOnlyBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 8, marginBottom: 15 },
 });

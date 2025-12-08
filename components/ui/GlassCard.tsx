@@ -1,52 +1,84 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
+import { StyleSheet, TouchableOpacity, StyleProp, ViewStyle, Platform, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useTheme } from '../../lib/theme';
+import * as Haptics from 'expo-haptics';
 
 interface GlassCardProps {
   children: React.ReactNode;
-  // CORRECTION : On utilise StyleProp<ViewStyle> pour accepter les tableaux de styles [style1, style2]
-  style?: StyleProp<ViewStyle>; 
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
-  variant?: 'default' | 'active';
+  variant?: 'default' | 'active' | 'featured';
+  intensity?: number;
 }
 
-export const GlassCard = ({ children, style, onPress, variant = 'default' }: GlassCardProps) => {
+export const GlassCard = ({ 
+  children, 
+  style, 
+  onPress, 
+  variant = 'default',
+  intensity = 20 
+}: GlassCardProps) => {
   const { colors, isDark } = useTheme();
 
+  const isFeatured = variant === 'featured';
   const isActive = variant === 'active';
-  const borderColor = isActive ? colors.primary : colors.border;
-  const backgroundColor = isActive ? colors.primary + '10' : colors.glass;
+  
+  const getBackgroundColor = () => {
+    if (isFeatured) return isDark ? 'rgba(0, 243, 255, 0.15)' : 'rgba(0, 102, 255, 0.1)';
+    if (isActive) return colors.primary + '15';
+    return isDark ? 'rgba(30,30,40,0.4)' : 'rgba(255,255,255,0.5)';
+  };
 
-  // Assemblage du style de base + style dynamique + style passé en props
-  const containerStyle: StyleProp<ViewStyle> = [
-    styles.card,
-    {
-      backgroundColor,
-      borderColor,
-      shadowColor: isDark ? 'transparent' : '#000',
-    },
-    style 
-  ];
+  const borderColor = (isActive || isFeatured) ? colors.primary + '50' : colors.border;
+  const Container = onPress ? TouchableOpacity : View;
 
-  if (onPress) {
-    return (
-      <TouchableOpacity style={containerStyle} onPress={onPress} activeOpacity={0.8}>
+  const handlePress = () => {
+    if (onPress) {
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPress();
+    }
+  };
+
+  return (
+    <Container 
+      onPress={handlePress} 
+      activeOpacity={0.7} 
+      style={[styles.container, style]} // Le style externe définit la taille du conteneur
+    >
+      <BlurView 
+        intensity={Platform.OS === 'android' ? intensity + 20 : intensity}
+        tint={isDark ? 'dark' : 'light'}
+        style={[
+          styles.blurContainer, // FLEX 1 au lieu de height 100%
+          { 
+            backgroundColor: getBackgroundColor(),
+            borderColor: borderColor,
+          }
+        ]}
+      >
         {children}
-      </TouchableOpacity>
-    );
-  }
-
-  return <View style={containerStyle}>{children}</View>;
+      </BlurView>
+    </Container>
+  );
 };
 
 const styles = StyleSheet.create({
-  card: {
+  container: {
     borderRadius: 24,
+    overflow: 'hidden',
+    // Pas de height fixe ici, on laisse le parent ou le contenu décider
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 15,
+    elevation: 5,
+  },
+  blurContainer: {
     padding: 20,
+    borderRadius: 24,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 0,
+    width: '100%',
+    flex: 1, // ✅ CORRECTION MAJEURE : Permet de s'adapter au contenu
   },
 });

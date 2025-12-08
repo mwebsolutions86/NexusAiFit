@@ -1,10 +1,11 @@
+// hooks/useNutritionLog.ts
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { NutritionLogDB } from '../types/nutrition';
 
 export const useNutritionLog = (dateStr: string) => {
   return useQuery({
-    queryKey: ['nutritionLogs', dateStr],
+    queryKey: ['nutritionLog', dateStr],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return null;
@@ -17,7 +18,13 @@ export const useNutritionLog = (dateStr: string) => {
         .maybeSingle();
 
       if (error) throw error;
-      return data as NutritionLogDB | null;
+      
+      // On retourne un objet par défaut si rien n'existe encore pour ce jour
+      return (data as NutritionLogDB) || { 
+          meals_status: [], 
+          total_calories: 0, 
+          total_protein: 0 
+      };
     },
   });
 };

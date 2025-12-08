@@ -1,223 +1,260 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, ActivityIndicator, ImageBackground } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TextInput, 
+  ScrollView, 
+  TouchableOpacity, 
+  Image, 
+  Alert,
+  Platform,
+  Dimensions
+} from 'react-native';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { useTheme } from '../../lib/theme';
-import { useAIMealPrep } from '../../hooks/useAIMealPrep';
-import { Recipe } from '../../types/recipe';
+import { supabase } from '../../lib/supabase';
 import { ScreenLayout } from '../../components/ui/ScreenLayout';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { NeonButton } from '../../components/ui/NeonButton';
+
+const { width } = Dimensions.get('window');
 
 export default function MealPrepScreen() {
-  const theme = useTheme();
+  const { colors } = useTheme();
   const router = useRouter();
-  const { savedRecipes, generateRecipe, saveRecipe, isGenerating } = useAIMealPrep();
 
   const [ingredients, setIngredients] = useState('');
-  const [currentRecipe, setCurrentRecipe] = useState<Recipe | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [recipe, setRecipe] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   // --- ACTIONS ---
+  const handleGenerateRecipe = async () => {
+      if (!ingredients.trim()) {
+          Alert.alert("Garde-manger vide", "Indiquez au moins un ingrédient ou une envie.");
+          return;
+      }
 
-  const handleGenerate = async () => {
-    if (!ingredients.trim()) {
-        Alert.alert("Frigo Vide ?", "Indiquez quelques ingrédients (ex: Poulet, Riz, Citron) ou un thème (ex: Italien).");
-        return;
-    }
-    
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-        const recipe = await generateRecipe(ingredients);
-        setCurrentRecipe(recipe);
-        setShowHistory(false);
-    } catch (e: any) {
-        if (e.message === "PREMIUM_REQUIRED") {
-            Alert.alert("Fonction Chef Étoilé 💎", "Réservé aux membres Premium.", [
-                { text: "Voir Offres", onPress: () => router.push('/subscription') },
-                { text: "Annuler", style: "cancel" }
-            ]);
-        } else {
-            Alert.alert("Erreur Chef", "Le chef est en pause. " + e.message);
-        }
-    }
-  };
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      setLoading(true);
+      setRecipe(null); // Reset pour l'effet de surprise
 
-  const handleSave = async () => {
-      if (!currentRecipe) return;
       try {
-          await saveRecipe(currentRecipe);
-          Alert.alert("Livre de Recettes", "Recette sauvegardée avec succès !");
-          setCurrentRecipe(null); // Reset
-          setShowHistory(true); // Montrer la liste
-      } catch (e) {
-          Alert.alert("Erreur", "Impossible de sauvegarder.");
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) return;
+
+          // Récupération du profil pour adapter les macros
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          // Appel au Chef Nexus
+          const { data, error } = await supabase.functions.invoke('supafit-ai', {
+            body: {
+              type: 'CHEF', // On appelle le nouveau case backend
+              preferences: ingredients, // On passe les ingrédients ici
+              userProfile: profile || {},
+            }
+          });
+
+          if (error) throw error;
+
+          // Parsing sécurisé
+          let result = data;
+          if (typeof data === 'string') {
+               try { result = JSON.parse(data); } catch { throw new Error("Erreur de lecture de la recette."); }
+          }
+          if (result.response && typeof result.response === 'string') {
+               try { result = JSON.parse(result.response); } catch { /* C'est peut-être déjà l'objet */ }
+          }
+
+          setRecipe(result);
+          if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      } catch (e: any) {
+          Alert.alert("Le Chef est occupé", "Impossible de générer la recette pour le moment.");
+          console.error(e);
+      } finally {
+          setLoading(false);
       }
   };
 
-  // --- RENDERS ---
+  // --- RENDERERS ---
+  const renderRecipe = () => {
+      if (!recipe) return null;
 
-  const renderRecipeCard = (recipe: Recipe, isPreview = false) => (
-    <View key={recipe.title} style={{marginBottom: 20}}>
-        <GlassCard style={styles.recipeCard}>
-            <View style={styles.recipeHeader}>
-                <View style={[styles.iconBox, {backgroundColor: '#f59e0b20'}]}>
-                    <MaterialCommunityIcons name="chef-hat" size={24} color="#f59e0b" />
-                </View>
-                <View style={{flex:1, marginLeft: 15}}>
-                    <Text style={[styles.recipeTitle, {color: theme.colors.text}]}>{recipe.title}</Text>
-                    <Text style={[styles.recipeTime, {color: theme.colors.textSecondary}]}>
-                        ⏱️ Prép: {recipe.prep_time} • Cuisson: {recipe.cook_time}
-                    </Text>
-                </View>
-            </View>
+      return (
+          <Animated.View entering={FadeInUp.springify()} style={{ paddingBottom: 50 }}>
+              
+              {/* TITRE ET DESCRIPTION */}
+              <View style={styles.headerRecipe}>
+                  <MaterialCommunityIcons name="chef-hat" size={40} color={colors.primary} style={{marginBottom: 10}} />
+                  <Text style={[styles.recipeTitle, { color: colors.text }]}>{recipe.title}</Text>
+                  <Text style={[styles.recipeDesc, { color: colors.textSecondary }]}>"{recipe.description}"</Text>
+              </View>
 
-            <View style={styles.macrosRow}>
-                <View style={styles.macroBadge}>
-                    <Text style={styles.macroVal}>{recipe.calories}</Text>
-                    <Text style={styles.macroLabel}>KCAL</Text>
-                </View>
-                <View style={styles.macroBadge}>
-                    <Text style={[styles.macroVal, {color: theme.colors.success}]}>{recipe.macros?.protein}g</Text>
-                    <Text style={styles.macroLabel}>PROT</Text>
-                </View>
-                <View style={styles.macroBadge}>
-                    <Text style={[styles.macroVal, {color: theme.colors.warning}]}>{recipe.macros?.carbs}g</Text>
-                    <Text style={styles.macroLabel}>GLU</Text>
-                </View>
-                <View style={styles.macroBadge}>
-                    <Text style={[styles.macroVal, {color: '#f43f5e'}]}>{recipe.macros?.fat}g</Text>
-                    <Text style={styles.macroLabel}>LIP</Text>
-                </View>
-            </View>
+              {/* CARTE MACROS */}
+              <View style={styles.macroRow}>
+                  <GlassCard style={styles.macroBadge} intensity={20}>
+                      <Text style={[styles.macroVal, {color: colors.primary}]}>{recipe.macros_per_serving?.calories || '?'}</Text>
+                      <Text style={[styles.macroLabel, {color: colors.textSecondary}]}>KCAL</Text>
+                  </GlassCard>
+                  <GlassCard style={styles.macroBadge} intensity={20}>
+                      <Text style={[styles.macroVal, {color: colors.success}]}>{recipe.macros_per_serving?.protein || '?'}g</Text>
+                      <Text style={[styles.macroLabel, {color: colors.textSecondary}]}>PROT</Text>
+                  </GlassCard>
+                  <GlassCard style={styles.macroBadge} intensity={20}>
+                      <Text style={[styles.macroVal, {color: colors.warning}]}>{recipe.macros_per_serving?.carbs || '?'}g</Text>
+                      <Text style={[styles.macroLabel, {color: colors.textSecondary}]}>GLU</Text>
+                  </GlassCard>
+              </View>
 
-            <View style={styles.divider} />
+              {/* INGRÉDIENTS */}
+              <GlassCard style={styles.sectionCard} intensity={15}>
+                  <View style={styles.sectionHeader}>
+                      <MaterialCommunityIcons name="basket-outline" size={20} color={colors.primary} />
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>MISE EN PLACE</Text>
+                  </View>
+                  {recipe.ingredients?.map((ing: string, i: number) => (
+                      <View key={i} style={styles.listItem}>
+                          <View style={[styles.bullet, { backgroundColor: colors.primary }]} />
+                          <Text style={{ color: colors.textSecondary, flex: 1 }}>{ing}</Text>
+                      </View>
+                  ))}
+              </GlassCard>
 
-            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>INGRÉDIENTS</Text>
-            {recipe.ingredients?.map((ing, i) => (
-                <Text key={i} style={[styles.listItem, {color: theme.colors.textSecondary}]}>• {ing}</Text>
-            ))}
+              {/* ÉTAPES */}
+              <GlassCard style={styles.sectionCard} intensity={15}>
+                  <View style={styles.sectionHeader}>
+                      <MaterialCommunityIcons name="fire" size={20} color={colors.danger} />
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>EXÉCUTION</Text>
+                  </View>
+                  {recipe.steps?.map((step: string, i: number) => (
+                      <View key={i} style={styles.stepItem}>
+                          <Text style={[styles.stepNum, { color: colors.text, borderColor: colors.primary }]}>{i + 1}</Text>
+                          <Text style={{ color: colors.textSecondary, flex: 1, lineHeight: 20 }}>{step}</Text>
+                      </View>
+                  ))}
+              </GlassCard>
 
-            <View style={{height: 15}} />
+              {/* LE TIP DU CHEF */}
+              {recipe.chef_tip && (
+                  <LinearGradient 
+                      colors={[colors.primary + '20', 'transparent']} 
+                      style={styles.chefTipBox}
+                  >
+                      <View style={{flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 5}}>
+                          <MaterialCommunityIcons name="star-face" size={20} color="#FFD700" />
+                          <Text style={{color: '#FFD700', fontWeight: 'bold', letterSpacing: 1}}>LE SECRET DU CHEF</Text>
+                      </View>
+                      <Text style={{color: colors.text, fontStyle: 'italic'}}>
+                          {recipe.chef_tip}
+                      </Text>
+                  </LinearGradient>
+              )}
 
-            <Text style={[styles.sectionTitle, {color: theme.colors.text}]}>INSTRUCTIONS</Text>
-            {recipe.instructions?.map((step, i) => (
-                <View key={i} style={{flexDirection:'row', marginBottom: 8}}>
-                    <Text style={{color: theme.colors.primary, fontWeight:'bold', marginRight: 8}}>{i+1}.</Text>
-                    <Text style={[styles.listItem, {color: theme.colors.textSecondary, flex:1}]}>{step}</Text>
-                </View>
-            ))}
-
-            {recipe.storage_tips && (
-                <View style={styles.tipBox}>
-                    <MaterialCommunityIcons name="information-outline" size={16} color={theme.colors.text} />
-                    <Text style={[styles.tipText, {color: theme.colors.text}]}>{recipe.storage_tips}</Text>
-                </View>
-            )}
-        </GlassCard>
-
-        {isPreview && (
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <LinearGradient colors={['#10b981', '#059669']} style={styles.gradientBtn}>
-                    <MaterialCommunityIcons name="content-save" size={20} color="#fff" style={{marginRight: 8}} />
-                    <Text style={styles.btnText}>SAUVEGARDER DANS MON LIVRE</Text>
-                </LinearGradient>
-            </TouchableOpacity>
-        )}
-    </View>
-  );
+          </Animated.View>
+      );
+  };
 
   return (
     <ScreenLayout>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>CHEF GASTRO IA</Text>
-        <TouchableOpacity onPress={() => setShowHistory(!showHistory)} style={styles.backBtn}>
-           <MaterialCommunityIcons name={showHistory ? "creation" : "book-open-variant"} size={24} color={theme.colors.primary} />
-        </TouchableOpacity>
-      </View>
+        {/* FOND D'AMBIANCE */}
+        <Image 
+            source={require('../../assets/adaptive-icon.png')} 
+            style={[StyleSheet.absoluteFillObject, { opacity: 0.05, transform: [{scale: 2}] }]}
+            blurRadius={50}
+        />
 
-      <ScrollView contentContainerStyle={styles.content}>
-        
-        {/* INPUT ZONE (Si pas en mode historique) */}
-        {!showHistory && !currentRecipe && (
-            <GlassCard style={styles.inputCard}>
-                <Text style={[styles.promptLabel, {color: theme.colors.text}]}>QU'AVEZ-VOUS DANS LE FRIGO ?</Text>
+        <ScrollView contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
+            
+            {/* HEADER */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={24} color={colors.text} />
+                </TouchableOpacity>
+                <Text style={[styles.pageTitle, { color: colors.text }]}>ATELIER GASTRONOMIQUE</Text>
+            </View>
+
+            {/* INPUT CARD */}
+            <GlassCard style={styles.inputCard} intensity={30}>
+                <Text style={[styles.label, {color: colors.primary}]}>QU'AVEZ-VOUS EN RÉSERVE ?</Text>
                 <TextInput 
-                    style={[styles.input, { color: theme.colors.text, borderColor: theme.colors.border }]}
-                    placeholder="Ex: 2 oeufs, reste de riz, courgettes..."
-                    placeholderTextColor={theme.colors.textSecondary}
+                    style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                    placeholder="Ex: Poulet, Avocat, Riz, Citron..."
+                    placeholderTextColor={colors.textSecondary}
                     value={ingredients}
                     onChangeText={setIngredients}
                     multiline
                 />
-                <TouchableOpacity style={styles.genBtn} onPress={handleGenerate} disabled={isGenerating}>
-                    <LinearGradient colors={['#f59e0b', '#d97706']} style={styles.gradientBtn}>
-                        {isGenerating ? <ActivityIndicator color="#fff"/> : (
-                            <>
-                                <MaterialCommunityIcons name="silverware-variant" size={20} color="#fff" style={{marginRight: 8}} />
-                                <Text style={styles.btnText}>CRÉER UNE RECETTE</Text>
-                            </>
-                        )}
-                    </LinearGradient>
-                </TouchableOpacity>
+                <NeonButton 
+                    label="CRÉER UN PLAT D'EXCEPTION" 
+                    icon="silverware-fork-knife" 
+                    onPress={handleGenerateRecipe}
+                    loading={loading}
+                />
             </GlassCard>
-        )}
 
-        {/* MODE RECETTE GÉNÉRÉE */}
-        {!showHistory && currentRecipe && renderRecipeCard(currentRecipe, true)}
+            <View style={{ height: 20 }} />
 
-        {/* MODE HISTORIQUE (LIVRE DE CUISINE) */}
-        {showHistory && (
-            <View>
-                <Text style={[styles.bookTitle, {color: theme.colors.textSecondary}]}>VOTRE LIVRE DE RECETTES ({savedRecipes?.length})</Text>
-                {savedRecipes?.map(r => renderRecipeCard(r, false))}
-                {savedRecipes?.length === 0 && (
-                    <Text style={{textAlign:'center', color:theme.colors.textSecondary, marginTop: 20}}>Aucune recette sauvegardée.</Text>
-                )}
-            </View>
-        )}
+            {/* RÉSULTAT */}
+            {recipe ? renderRecipe() : (
+                !loading && (
+                    <View style={styles.placeholder}>
+                        <MaterialCommunityIcons name="food-variant" size={60} color={colors.textSecondary + '40'} />
+                        <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>
+                            Le Chef Nexus attend vos ingrédients pour sublimer votre diète.
+                        </Text>
+                    </View>
+                )
+            )}
 
-      </ScrollView>
+        </ScrollView>
     </ScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
-  backBtn: { padding: 8 },
-  headerTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 2 },
-  content: { padding: 20, paddingBottom: 100 },
-  
-  inputCard: { padding: 20, marginBottom: 20 },
-  promptLabel: { fontSize: 14, fontWeight: '900', marginBottom: 15, textAlign: 'center' },
-  input: { height: 100, borderWidth: 1, borderRadius: 16, padding: 15, marginBottom: 20, textAlignVertical: 'top', fontSize: 16 },
-  genBtn: { borderRadius: 16, overflow: 'hidden' },
-  gradientBtn: { paddingVertical: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 14, letterSpacing: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, marginTop: 10 },
+  backBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, marginRight: 15 },
+  pageTitle: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },
 
-  recipeCard: { padding: 20, marginBottom: 15 },
-  recipeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  iconBox: { width: 50, height: 50, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  recipeTitle: { fontSize: 18, fontWeight: 'bold', lineHeight: 24 },
-  recipeTime: { fontSize: 12, marginTop: 4 },
-  
-  macrosRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, backgroundColor: 'rgba(0,0,0,0.2)', padding: 10, borderRadius: 12 },
-  macroBadge: { alignItems: 'center', flex: 1 },
-  macroVal: { fontSize: 16, fontWeight: '900' },
-  macroLabel: { fontSize: 9, fontWeight: 'bold', opacity: 0.7 },
+  inputCard: { padding: 20, borderRadius: 24 },
+  label: { fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 10 },
+  input: { 
+    borderWidth: 1, borderRadius: 12, padding: 15, fontSize: 16, minHeight: 80, 
+    textAlignVertical: 'top', marginBottom: 20, backgroundColor: 'rgba(0,0,0,0.2)' 
+  },
 
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: 15 },
-  sectionTitle: { fontSize: 12, fontWeight: '900', marginBottom: 10, letterSpacing: 1 },
-  listItem: { fontSize: 14, marginBottom: 6, lineHeight: 20 },
-  
-  tipBox: { flexDirection: 'row', gap: 10, backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 12, marginTop: 15 },
-  tipText: { fontSize: 12, fontStyle: 'italic', flex: 1 },
+  // Recette Styles
+  headerRecipe: { alignItems: 'center', marginVertical: 20 },
+  recipeTitle: { fontSize: 24, fontWeight: '900', textAlign: 'center', marginBottom: 10, lineHeight: 28 },
+  recipeDesc: { fontSize: 14, textAlign: 'center', fontStyle: 'italic', opacity: 0.8, lineHeight: 20 },
 
-  saveBtn: { borderRadius: 16, overflow: 'hidden', marginTop: 0 },
-  bookTitle: { fontSize: 12, fontWeight: '900', marginBottom: 15, textAlign: 'center', opacity: 0.7 }
+  macroRow: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 25 },
+  macroBadge: { padding: 10, minWidth: 80, alignItems: 'center', borderRadius: 12 },
+  macroVal: { fontSize: 18, fontWeight: '900' },
+  macroLabel: { fontSize: 10, fontWeight: 'bold' },
+
+  sectionCard: { padding: 20, borderRadius: 20, marginBottom: 15 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 15 },
+  sectionTitle: { fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+
+  listItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 },
+  bullet: { width: 6, height: 6, borderRadius: 3 },
+
+  stepItem: { flexDirection: 'row', gap: 15, marginBottom: 15 },
+  stepNum: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, textAlign: 'center', lineHeight: 22, fontSize: 12, fontWeight: 'bold' },
+
+  chefTipBox: { padding: 20, borderRadius: 16, borderWidth: 1, borderColor: '#FFD700', marginTop: 10 },
+
+  placeholder: { alignItems: 'center', justifyContent: 'center', marginTop: 50, opacity: 0.7 },
+  placeholderText: { textAlign: 'center', marginTop: 15, maxWidth: 250, lineHeight: 20 },
 });

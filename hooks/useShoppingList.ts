@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { useAINutrition } from './useAINutrition'; // Pour lire le plan
+import { useAINutrition } from './useAINutrition'; 
+import { NutritionDay, Meal, MealItem } from '../types/nutrition'; // ✅ Types importés
 
 export type ShoppingItem = {
   id: string;
@@ -11,10 +12,13 @@ export type ShoppingItem = {
 
 export const useShoppingList = () => {
   const queryClient = useQueryClient();
-  const { activePlan } = useAINutrition();
+  
+  // ✅ CORRECTION 1 : On récupère 'mealPlan' (le nouveau nom)
+  const { mealPlan } = useAINutrition(); 
+  
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // 1. Lecture de la liste (Triée : Non-cochés en haut)
+  // 1. Lecture de la liste
   const { data: items, isLoading } = useQuery({
     queryKey: ['shoppingList'],
     queryFn: async () => {
@@ -25,7 +29,7 @@ export const useShoppingList = () => {
         .from('shopping_items')
         .select('*')
         .eq('user_id', session.user.id)
-        .order('is_checked', { ascending: true }) // Cochés en bas
+        .order('is_checked', { ascending: true }) 
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -33,7 +37,7 @@ export const useShoppingList = () => {
     },
   });
 
-  // 2. Action : Basculer l'état (Cocher/Décocher)
+  // 2. Basculer l'état
   const toggleMutation = useMutation({
     mutationFn: async (item: ShoppingItem) => {
       const { error } = await supabase
@@ -47,7 +51,7 @@ export const useShoppingList = () => {
     },
   });
 
-  // 3. Action : Ajouter un item manuel
+  // 3. Ajouter un item
   const addMutation = useMutation({
     mutationFn: async (name: string) => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -64,7 +68,7 @@ export const useShoppingList = () => {
     },
   });
 
-  // 4. Action : Nettoyer la liste (Tout supprimer)
+  // 4. Nettoyer la liste
   const clearMutation = useMutation({
     mutationFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -82,38 +86,37 @@ export const useShoppingList = () => {
     },
   });
 
-  // 5. Action : IMPORTER depuis le Plan (Le Cerveau)
+  // 5. Importer depuis le Plan (GÉNÉRATEUR)
   const generateFromPlan = async () => {
-    if (!activePlan?.content?.days) throw new Error("Aucun plan actif");
+    // ✅ CORRECTION 2 : Vérification sur mealPlan
+    if (!mealPlan?.content?.days) throw new Error("Aucun plan actif");
     setIsGenerating(true);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      // A. Extraire tous les ingrédients uniques
       const ingredients = new Set<string>();
       
-      activePlan.content.days.forEach(day => {
-        day.meals.forEach(meal => {
-            if (meal.items) {
-                meal.items.forEach(item => {
-                    // Nettoyage basique (retirer les quantités si possible, ou garder tel quel)
-                    // Ex: "2 Oeufs" -> "2 Oeufs"
-                    ingredients.add(item.name.trim());
-                });
-            }
-        });
+      // ✅ CORRECTION 3 : Typage explicite des itérateurs
+      mealPlan.content.days.forEach((day: NutritionDay) => {
+        if (day.meals) {
+            day.meals.forEach((meal: Meal) => {
+                if (meal.items) {
+                    meal.items.forEach((item: MealItem) => {
+                        if (item.name) ingredients.add(item.name.trim());
+                    });
+                }
+            });
+        }
       });
 
-      // B. Préparer l'insertion (Bulk)
       const toInsert = Array.from(ingredients).map(name => ({
         user_id: session.user.id,
         item_name: name,
         is_checked: false
       }));
 
-      // C. Insérer (On ne supprime pas l'existant, on ajoute à la suite)
       if (toInsert.length > 0) {
           const { error } = await supabase
             .from('shopping_items')

@@ -152,7 +152,7 @@ export default function BodyBatteryScreen() {
             </View>
             <Text style={styles.sectionTitle}>{t('modules.body.factors_title')}</Text>
             <View style={styles.factorsGrid}>
-                <View style={styles.factorCard}><MaterialCommunityIcons name="bed-clock" size={24} color="#8b5cf6" style={styles.factorIcon} /><Text style={styles.factorValue}>{factors.sleep.label}</Text><Text style={styles.factorLabel}>{t('modules.body.factors.sleep')}</Text></View>
+                <View style={styles.factorCard}><MaterialCommunityIcons name="bed-outline" size={24} color="#8b5cf6" style={styles.factorIcon} /><Text style={styles.factorValue}>{factors.sleep.label}</Text><Text style={styles.factorLabel}>{t('modules.body.factors.sleep')}</Text></View>
                 <View style={styles.factorCard}><MaterialCommunityIcons name="brain" size={24} color="#f59e0b" style={styles.factorIcon} /><Text style={styles.factorValue}>{factors.stress.label}</Text><Text style={styles.factorLabel}>{t('modules.body.factors.stress')}</Text></View>
                 <View style={styles.factorCard}><MaterialCommunityIcons name="dumbbell" size={24} color="#ef4444" style={styles.factorIcon} /><Text style={styles.factorValue}>{factors.activity.label}</Text><Text style={styles.factorLabel}>{t('modules.body.factors.sport')}</Text></View>
             </View>

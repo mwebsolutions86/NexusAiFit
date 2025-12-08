@@ -1,329 +1,353 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  TouchableOpacity, 
+  Dimensions, 
+  RefreshControl,
+  Platform,
+  Image,
+  StatusBar
+} from 'react-native';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
+import * as Haptics from 'expo-haptics';
+import Animated, { FadeInUp, FadeInRight } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTranslation } from 'react-i18next';
-import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { supabase } from '../../lib/supabase';
 
-// --- HOOKS ---
+// Hooks & Libs
 import { useTheme } from '../../lib/theme';
 import { useUserProfile } from '../../hooks/useUserProfile';
-import { useDashboardStats } from '../../hooks/useDashboardStats';
-import { useActivePlans } from '../../hooks/useActivePlans';
-import { useSubscription } from '../../hooks/useSubscription';
-
-// --- COMPONENTS UI ---
+import { useActivePlans } from '../../hooks/useActivePlans'; 
+import { useNutritionLog } from '../../hooks/useNutritionLog'; 
 import { ScreenLayout } from '../../components/ui/ScreenLayout';
 import { GlassCard } from '../../components/ui/GlassCard';
 
-// Petit hook utilitaire pour récupérer l'ID utilisateur
-const useCurrentUser = () => {
-  return useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      return session?.user?.id;
-    },
-    staleTime: Infinity,
-  });
-};
+const { width } = Dimensions.get('window');
 
-const ProgressWidget = ({ label, value, target, unit, icon, color }: any) => {
-    const { colors } = useTheme();
-    // Sécurité division par zéro
-    const safeTarget = target > 0 ? target : 2500;
-    const percentage = Math.min(value / safeTarget, 1);
-    
-    return (
-        <GlassCard style={styles.widgetCard}>
-            <View style={styles.widgetHeader}>
-                <View style={[styles.iconBox, { backgroundColor: color + '20' }]}>
-                    <MaterialCommunityIcons name={icon} size={18} color={color} />
-                </View>
-                <Text style={[styles.widgetLabel, { color: colors.textSecondary }]}>{label}</Text>
-            </View>
-            <View style={{ marginTop: 15 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 5 }}>
-                    <Text style={[styles.widgetValue, { color: colors.text }]}>{Math.round(value)}</Text>
-                    <Text style={[styles.widgetTarget, { color: colors.textSecondary }]}> / {Math.round(safeTarget)} {unit}</Text>
-                </View>
-                <View style={[styles.progressBg, { backgroundColor: colors.border }]}>
-                    <LinearGradient
-                        colors={[color, color + '80']}
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                        style={[styles.progressFill, { width: `${percentage * 100}%` }]}
-                    />
-                </View>
-            </View>
-        </GlassCard>
-    );
+const getTodayIndex = () => {
+  const day = new Date().getDay(); 
+  // 0 = Dimanche (6), 1 = Lundi (0)...
+  return (day + 6) % 7; 
 };
 
 export default function DashboardScreen() {
-  const theme = useTheme();
-  const { colors } = theme;
+  const { colors, isDark } = useTheme(); // ✅ On récupère le thème
   const router = useRouter();
-  const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const today = new Date().toISOString().split('T')[0];
 
-  // 1. Récupération des données
-  const { data: userId } = useCurrentUser();
   const { userProfile } = useUserProfile();
-  
-  // Note: On passe activeMealPlan en paramètre optionnel si le hook le supporte, 
-  // sinon on calcule le target ici-même.
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useDashboardStats(userId);
-  const { data: plans, isLoading: plansLoading, refetch: refetchPlans } = useActivePlans(userId);
-  
-  // 2. Vérification Premium
-  const { isPremium } = useSubscription();
+  const { data: plans, isLoading: isPlansLoading } = useActivePlans(userProfile?.id);
+  const { data: log, isLoading: isLogLoading } = useNutritionLog(today);
 
-  const isLoading = statsLoading || plansLoading;
-  const activeWorkout = plans?.workoutPlan;
-  const activeMealPlan = plans?.mealPlan;
+  // --- 🧠 CALCULATEUR CALORIES (Logique Bulldozer) ---
+  const nutritionTarget = useMemo(() => {
+      if (!plans?.mealPlan) return 2500;
 
-  // --- CORRECTION : CALCUL DYNAMIQUE DE L'OBJECTIF CALORIQUE ---
- // --- CALCUL DYNAMIQUE ROBUSTE ---
-  const dynamicCaloriesTarget = useMemo(() => {
-    // Si un plan nutritionnel est actif
-    if (activeMealPlan?.days?.[0]?.meals) {
-        let total = 0;
-        activeMealPlan.days[0].meals.forEach((m: any) => {
-            // Cas 1 : Structure détaillée (avec liste d'ingrédients 'items')
-            if (m.items && Array.isArray(m.items)) {
-                m.items.forEach((i: any) => total += (Number(i.calories) || 0));
-            } 
-            // Cas 2 : Structure simple (calories directement sur le repas)
-            // Cela permet de supporter les anciens plans ou les erreurs d'IA
-            else if (m.calories) {
-                total += (Number(m.calories) || 0);
-            }
-        });
-        // Si le total trouvé est cohérent (> 500 kcal), on l'utilise. Sinon 2500.
-        return total > 500 ? total : 2500;
-    }
-    // Fallback profil
-    return stats?.targetCalories || 2500;
-  }, [activeMealPlan, stats]);
+      // Normalisation de la structure
+      const rawData = plans.mealPlan;
+      const content = ((rawData as any).content && (rawData as any).content.days) ? (rawData as any).content : rawData;
 
-  const onRefresh = () => {
-    refetchStats();
-    refetchPlans();
-    queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+      if (!content.days || !Array.isArray(content.days)) return 2500;
+
+      // Trouver le bon jour
+      const todayIdx = getTodayIndex();
+      const safeIndex = todayIdx % content.days.length;
+      const day = content.days[safeIndex];
+
+      // Somme
+      let total = 0;
+      if (day.meals && Array.isArray(day.meals)) {
+          day.meals.forEach((meal: any) => {
+              if (meal.items && Array.isArray(meal.items)) {
+                  meal.items.forEach((item: any) => {
+                      const valStr = String(item.calories || 0).replace(/[^0-9.]/g, ''); 
+                      const val = parseInt(valStr, 10);
+                      if (!isNaN(val)) total += val;
+                  });
+              }
+          });
+      }
+      return total > 0 ? total : 2500;
+  }, [plans]);
+
+  // --- DONNÉES ---
+  const caloriesConsumed = log?.total_calories || 0;
+  const safeTarget = nutritionTarget; 
+  const caloriesProgress = Math.min((caloriesConsumed / safeTarget) * 100, 100);
+  const remaining = Math.max(0, safeTarget - caloriesConsumed);
+
+  const workoutToday = useMemo(() => {
+      const rawData = plans?.workoutPlan;
+      const content = ((rawData as any)?.content && (rawData as any).content.days) ? (rawData as any).content : rawData;
+      
+      if (!content || !content.days || !Array.isArray(content.days)) return null;
+      
+      const todayIdx = getTodayIndex();
+      const safeIndex = todayIdx % content.days.length;
+      return content.days[safeIndex];
+  }, [plans]);
+
+  // --- ACTIONS ---
+  const onRefresh = async () => {
+    if (Platform.OS !== 'web') Haptics.selectionAsync();
+    await queryClient.invalidateQueries();
   };
 
-  const userName = userProfile?.full_name?.split(' ')[0] || 'Athlète';
+  const navigateTo = (route: string) => {
+    if (Platform.OS !== 'web') Haptics.selectionAsync();
+    router.push(route as any);
+  };
 
   return (
     <ScreenLayout>
+      {/* FOND AMBIANT (Subtil en Light, Sombre en Dark) */}
+      <Image 
+          source={require('../../assets/adaptive-icon.png')} 
+          style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02, transform: [{scale: 1.5}] }]}
+          blurRadius={40}
+      />
+      
+      {/* EFFET LUMIÈRE HAUT (Seulement en Dark pour l'ambiance) */}
+      {isDark && (
+        <View style={{position: 'absolute', top: -100, left: 0, right: 0, height: 250, backgroundColor: colors.primary, opacity: 0.08, borderRadius: 100, transform: [{scaleX: 2}]}} />
+      )}
+
       <ScrollView
-        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} tintColor={colors.primary} />}
-        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isPlansLoading || isLogLoading} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        {/* HEADER */}
-        <View style={styles.header}>
-          <View>
-            <Text style={[styles.greeting, { color: colors.textSecondary }]}>{t('dashboard.greeting')}</Text>
-            <Text style={[styles.username, { color: colors.text }]}>{userName}</Text>
-          </View>
-          <TouchableOpacity onPress={() => router.push('/profile')} style={[styles.profileBtn, { backgroundColor: colors.glass, borderColor: colors.border }]}>
-            <Ionicons name="person" size={18} color={colors.text} />
-          </TouchableOpacity>
+        
+        {/* --- 1. HUD HEADER --- */}
+        <View style={styles.hudContainer}>
+            <View style={styles.topBar}>
+                <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                    <View style={[styles.statusDot, { backgroundColor: colors.success, shadowColor: colors.success }]} />
+                    <Text style={[styles.systemText, { color: isDark ? '#fff' : colors.textSecondary }]}>SYSTEM ONLINE</Text>
+                </View>
+                <Text style={[styles.dateText, { color: isDark ? '#fff' : colors.text }]}>
+                    {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' }).toUpperCase()}
+                </Text>
+            </View>
+
+            <View style={styles.profileRow}>
+                <View>
+                    <Text style={[styles.welcomeLabel, { color: colors.textSecondary }]}>OPERATOR_ID</Text>
+                    <Text style={[styles.operatorName, { color: colors.text }]}>
+                        {userProfile?.full_name ? userProfile.full_name.toUpperCase() : "INITIÉ"}
+                    </Text>
+                    <View style={[styles.rankBadge, { borderColor: colors.border, backgroundColor: colors.primary + '10' }]}>
+                        <Text style={[styles.rankText, { color: colors.primary }]}>
+                            {userProfile?.tier === 'PREMIUM' ? 'ELITE CLASS' : 'STANDARD CLASS'}
+                        </Text>
+                    </View>
+                </View>
+
+                <TouchableOpacity onPress={() => navigateTo('/profile')} style={styles.avatarContainer}>
+                    <LinearGradient
+                        colors={[colors.primary, isDark ? 'transparent' : '#fff']}
+                        style={styles.avatarBorder}
+                    >
+                        <View style={[styles.avatarInner, { backgroundColor: isDark ? '#000' : '#fff' }]}>
+                            <MaterialCommunityIcons name="account" size={30} color={colors.text} />
+                        </View>
+                    </LinearGradient>
+                </TouchableOpacity>
+            </View>
         </View>
 
-        {/* STATS WIDGETS */}
-        <View style={styles.statsRow}>
-           <ProgressWidget 
-              label={t('dashboard.stats_nutri')} 
-              value={stats?.caloriesConsumed || 0} // Vient du hook connecté à nutrition_logs
-              target={dynamicCaloriesTarget} // Vient du calcul local sur le plan IA
-              unit={t('dashboard.unit_kcal')}
-              icon="fire" 
-              color={colors.success} 
-           />
-           <View style={{ width: 10 }} />
-           <ProgressWidget 
-              label={t('dashboard.stats_work')} 
-              value={stats?.weeklyWorkouts || 0} 
-              target={userProfile?.training_days || 4} 
-              unit="S." 
-              icon="dumbbell" 
-              color={colors.primary} 
-           />
+        {/* --- 2. HERO CARD (DYNAMIQUE) --- */}
+        <Animated.View entering={FadeInUp.delay(200).springify()} style={{ paddingHorizontal: 20, marginTop: 10 }}>
+            <GlassCard 
+                style={[styles.heroCard, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(20,20,30,0.6)' : 'rgba(255,255,255,0.8)' }]} 
+                intensity={isDark ? 40 : 80}
+            >
+                
+                {/* SECTION CALORIES */}
+                <View style={styles.heroTop}>
+                    <View>
+                        <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>BILAN ÉNERGÉTIQUE</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                            <Text style={[styles.bigNumber, { color: colors.text }]}>{Math.round(caloriesConsumed)}</Text>
+                            <Text style={[styles.unit, { color: colors.textSecondary }]}> / {Math.round(safeTarget)} KCAL</Text>
+                        </View>
+                        
+                        {/* Progress Bar Adaptative */}
+                        <View style={[styles.progressBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
+                            <View style={[styles.progressFill, { width: `${caloriesProgress}%`, backgroundColor: colors.primary }]} />
+                        </View>
+                        
+                        <Text style={[styles.remainingText, { color: colors.textSecondary }]}>
+                            {Math.round(remaining)} kcal restantes
+                        </Text>
+                    </View>
+
+                    {/* Cercle Réacteur */}
+                    <View style={[styles.ringContainer, { borderColor: colors.primary + '30', backgroundColor: colors.primary + '05' }]}>
+                        <MaterialCommunityIcons name="lightning-bolt" size={32} color={colors.primary} />
+                    </View>
+                </View>
+
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                {/* SECTION WORKOUT */}
+                <View style={styles.heroBottom}>
+                    <View style={styles.statusRow}>
+                        <MaterialCommunityIcons 
+                            name={workoutToday ? "radioactive" : "sleep"} 
+                            size={18} 
+                            color={workoutToday ? colors.success : colors.textSecondary} 
+                        />
+                        <Text style={[styles.statusText, { color: colors.text }]}>
+                            {workoutToday ? "MISSION ACTIVE" : "REPOS"}
+                        </Text>
+                    </View>
+                    
+                    <TouchableOpacity onPress={() => navigateTo('/(tabs)/workout')}>
+                        <View style={[styles.actionChip, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}>
+                            <Text style={[styles.chipText, { color: colors.primary }]}>ACCÈS</Text>
+                            <Ionicons name="arrow-forward" size={12} color={colors.primary} />
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+            </GlassCard>
+        </Animated.View>
+
+        {/* --- 3. ACCÈS RAPIDE --- */}
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ACCÈS RAPIDE</Text>
+
+        <View style={styles.gridContainer}>
+            {/* CARTE SPORT */}
+            <TouchableOpacity style={{flex:1}} onPress={() => navigateTo('/(tabs)/workout')} activeOpacity={0.8}>
+                <Animated.View entering={FadeInRight.delay(300)}>
+                    <GlassCard style={[styles.smallCard, { backgroundColor: isDark ? undefined : '#fff' }]}>
+                        <View style={[styles.iconBox, { backgroundColor: colors.primary + '15' }]}>
+                            <MaterialCommunityIcons name="dumbbell" size={24} color={colors.primary} />
+                        </View>
+                        <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
+                            {workoutToday ? workoutToday.focus : "Sport"}
+                        </Text>
+                        <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
+                            {workoutToday ? `${workoutToday.exercises?.length} Exos` : "Planifier"}
+                        </Text>
+                    </GlassCard>
+                </Animated.View>
+            </TouchableOpacity>
+
+            {/* CARTE NUTRITION */}
+            <TouchableOpacity style={{flex:1}} onPress={() => navigateTo('/(tabs)/nutrition')} activeOpacity={0.8}>
+                <Animated.View entering={FadeInRight.delay(400)}>
+                    <GlassCard style={[styles.smallCard, { backgroundColor: isDark ? undefined : '#fff' }]}>
+                        <View style={[styles.iconBox, { backgroundColor: colors.success + '15' }]}>
+                            <MaterialCommunityIcons name="food-apple" size={24} color={colors.success} />
+                        </View>
+                        <Text style={[styles.cardTitle, { color: colors.text }]}>Nutrition</Text>
+                        <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
+                            {Math.round(caloriesProgress)}% Requis
+                        </Text>
+                    </GlassCard>
+                </Animated.View>
+            </TouchableOpacity>
         </View>
 
-        {/* ACTIVE WORKOUT CARD */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('dashboard.section_active')}</Text>
-        <TouchableOpacity 
-          style={styles.mainCardContainer}
-          activeOpacity={0.9}
-          onPress={() => router.push('/(tabs)/workout')}
-        >
-          <LinearGradient
-            colors={activeWorkout ? [colors.primary, colors.secondary] : [colors.glass, colors.glass]}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.5 }}
-            style={[styles.mainCardGradient, { borderColor: activeWorkout ? 'transparent' : colors.border }]}
-          >
-              {activeWorkout ? (
-                  <>
-                      <View style={{ flex: 1 }}>
-                          <View style={styles.activeBadge}>
-                              <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFD700" />
-                              <Text style={styles.badgeText}>{t('dashboard.active_badge')}</Text>
-                          </View>
-                          <Text style={styles.mainCardTitle}>{activeWorkout.title}</Text>
-                          <Text style={styles.mainCardSub}>
-                              {t('dashboard.card_focus')} {activeWorkout.days?.[0]?.focus} • {activeWorkout.days?.length} {t('dashboard.card_sess')}
-                          </Text>
-                      </View>
-                      <View style={styles.arrowBtn}>
-                          <Ionicons name="arrow-forward" size={20} color="#fff" />
-                      </View>
-                  </>
-              ) : (
-                  <>
-                       <View style={{ flex: 1 }}>
-                          <Text style={[styles.mainCardTitle, { color: colors.text }]}>{t('dashboard.no_plan_title')}</Text>
-                          <Text style={[styles.mainCardSub, { color: colors.textSecondary }]}>{t('dashboard.no_plan_desc')}</Text>
-                      </View>
-                      <View style={[styles.arrowBtn, { backgroundColor: colors.primary }]}>
-                          <Ionicons name="add" size={20} color="#fff" />
-                      </View>
-                  </>
-              )}
-          </LinearGradient>
+        {/* --- 4. HYDRATATION (Shortcut) --- */}
+        <TouchableOpacity style={{ marginHorizontal: 20, marginTop: 15 }} onPress={() => navigateTo('/features/water')}>
+            <Animated.View entering={FadeInUp.delay(500)}>
+                <GlassCard style={[styles.rowCard, { backgroundColor: isDark ? undefined : '#fff' }]}>
+                    <View style={{flexDirection:'row', alignItems:'center', gap: 15}}>
+                        <View style={[styles.iconBox, { backgroundColor: '#06b6d415', width: 40, height: 40 }]}>
+                            <Ionicons name="water" size={20} color="#06b6d4" />
+                        </View>
+                        <View>
+                            <Text style={[styles.cardTitle, { color: colors.text, fontSize: 14 }]}>Hydratation</Text>
+                            <Text style={[styles.cardSub, { color: colors.textSecondary }]}>Suivi journalier</Text>
+                        </View>
+                    </View>
+                    <Ionicons name="add-circle-outline" size={24} color={colors.textSecondary} />
+                </GlassCard>
+            </Animated.View>
         </TouchableOpacity>
 
-        {/* GRID NAVIGATION */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('dashboard.section_explore')}</Text>
-        <View style={styles.grid}>
-          <NavCard 
-            title={t('dashboard.mod_nutri')}
-            sub={activeMealPlan ? t('dashboard.mod_nutri_sub') : t('dashboard.mod_gen')}
-            icon="food-apple"
-            color={colors.success}
-            path="/(tabs)/nutrition" /* <--- CORRECTION ICI : Redirection vers l'onglet */
-          />
-          <NavCard 
-            title={t('dashboard.mod_lib')}
-            sub={t('dashboard.mod_lib_sub')}
-            icon="bookshelf"
-            color="#f59e0b"
-            path="/features/exercise-library"
-          />
-          
-          {/* CARTE HISTORIQUE VERROUILLÉE */}
-          <NavCard 
-            title={t('dashboard.mod_hist')}
-            sub={t('dashboard.mod_hist_sub')}
-            icon="history"
-            color="#8b5cf6"
-            path="/features/workout_log"
-            isLocked={!isPremium}
-          />
-          
-          <NavCard 
-            title={t('dashboard.mod_coach')}
-            sub={t('dashboard.mod_coach_sub')}
-            icon="robot"
-            color={colors.primary}
-            path="/(tabs)/coach"
-          />
-        </View>
       </ScrollView>
     </ScreenLayout>
   );
 }
 
-// Composant interne NavCard (Inchangé mais inclus pour complétude)
-const NavCard = ({ title, sub, icon, color, path, isLocked = false }: any) => {
-    const router = useRouter();
-    const { colors } = useTheme();
-
-    const handlePress = () => {
-        if (isLocked) {
-            Alert.alert(
-                "Fonctionnalité Premium 🔒",
-                "L'accès à l'historique complet et aux analyses est réservé aux membres Elite.",
-                [
-                    { text: "Annuler", style: "cancel" },
-                    { text: "Débloquer", onPress: () => router.push('/subscription') }
-                ]
-            );
-        } else {
-            router.push(path);
-        }
-    };
-
-    return (
-        <TouchableOpacity 
-            style={[
-                styles.gridItem, 
-                { 
-                    backgroundColor: colors.glass, 
-                    borderColor: colors.border,
-                    opacity: isLocked ? 0.7 : 1
-                }
-            ]} 
-            onPress={handlePress}
-            activeOpacity={0.7}
-        >
-            <View style={styles.gridHeader}>
-                <View style={[styles.iconBox, { backgroundColor: isLocked ? colors.textSecondary + '20' : color + '15' }]}>
-                    <MaterialCommunityIcons 
-                        name={icon} 
-                        size={18} 
-                        color={isLocked ? colors.textSecondary : color} 
-                    />
-                </View>
-                <Ionicons 
-                    name={isLocked ? "lock-closed" : "arrow-forward"} 
-                    size={16} 
-                    color={isLocked ? colors.textSecondary : colors.border} 
-                />
-            </View>
-            <View>
-                <Text style={[styles.gridTitle, { color: colors.text }]}>
-                    {title} {isLocked && "💎"}
-                </Text>
-                <Text style={[styles.gridSub, { color: colors.textSecondary }]}>{sub}</Text>
-            </View>
-        </TouchableOpacity>
-    );
-};
-
 const styles = StyleSheet.create({
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 15, paddingBottom: 20 },
-    greeting: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
-    username: { fontSize: 20, fontWeight: '300', marginTop: 2 },
-    profileBtn: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
-    sectionTitle: { fontSize: 11, fontWeight: '900', marginHorizontal: 20, marginBottom: 12, marginTop: 25, letterSpacing: 2 },
-    
-    statsRow: { flexDirection: 'row', paddingHorizontal: 20 },
-    widgetCard: { flex: 1, padding: 16 },
-    widgetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    widgetLabel: { fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5 },
-    widgetValue: { fontSize: 22, fontWeight: '900' },
-    widgetTarget: { fontSize: 11, fontWeight: '600' },
-    
-    iconBox: { width: 30, height: 30, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-    progressBg: { height: 4, borderRadius: 2, overflow: 'hidden', marginTop: 8 },
-    progressFill: { height: '100%', borderRadius: 2 },
-    
-    mainCardContainer: { marginHorizontal: 20, borderRadius: 24, overflow: 'hidden', height: 120, marginBottom: 10 },
-    mainCardGradient: { flex: 1, padding: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1 },
-    activeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6, backgroundColor: 'rgba(0,0,0,0.2)', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    badgeText: { color: '#FFD700', fontWeight: '900', fontSize: 8 },
-    mainCardTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-    mainCardSub: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 4 },
-    arrowBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
-    
-    grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 10 },
-    gridItem: { width: '48%', height: 110, borderRadius: 16, padding: 15, justifyContent: 'space-between', borderWidth: 1, marginBottom: 10 },
-    gridHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    gridTitle: { fontSize: 13, fontWeight: 'bold' },
-    gridSub: { fontSize: 10, marginTop: 2, letterSpacing: 0.5 },
+  hudContainer: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingHorizontal: 25,
+    paddingBottom: 20,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    opacity: 0.8
+  },
+  statusDot: { width: 6, height: 6, borderRadius: 3, shadowOpacity: 0.5, shadowRadius: 4, shadowOffset: {width:0, height:0} },
+  systemText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  dateText: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
+
+  profileRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  welcomeLabel: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 2 },
+  operatorName: { fontSize: 28, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  rankBadge: { 
+    alignSelf: 'flex-start', 
+    marginTop: 5, 
+    paddingHorizontal: 8, 
+    paddingVertical: 3, 
+    borderRadius: 6, 
+    borderWidth: 1, 
+  },
+  rankText: { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+
+  avatarContainer: { width: 60, height: 60 },
+  avatarBorder: { flex: 1, borderRadius: 30, padding: 2, justifyContent: 'center', alignItems: 'center' },
+  avatarInner: { flex: 1, width: '100%', borderRadius: 30, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'transparent' },
+
+  // HERO CARD
+  heroCard: { padding: 25, borderRadius: 28, borderWidth: 1 },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 5 },
+  bigNumber: { fontSize: 36, fontWeight: '900', letterSpacing: -1 },
+  unit: { fontSize: 12, fontWeight: 'bold', marginBottom: 6 },
+  
+  progressBar: { height: 6, width: 140, borderRadius: 3, marginTop: 5, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 3 },
+  remainingText: { fontSize: 10, marginTop: 8, fontWeight: 'bold', opacity: 0.7 },
+
+  ringContainer: {
+    width: 70, height: 70, borderRadius: 35, borderWidth: 4, justifyContent: 'center', alignItems: 'center',
+  },
+
+  divider: { height: 1, width: '100%', marginVertical: 20, opacity: 0.5 },
+
+  heroBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statusText: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+  actionChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  chipText: { fontSize: 10, fontWeight: '900' },
+
+  // GRID
+  sectionTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 2, marginTop: 30, marginBottom: 15, marginLeft: 25 },
+  gridContainer: { flexDirection: 'row', gap: 15, paddingHorizontal: 20 },
+  
+  smallCard: { padding: 15, borderRadius: 20, height: 130, justifyContent: 'space-between' },
+  iconBox: { width: 45, height: 45, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  cardTitle: { fontSize: 14, fontWeight: '900', marginBottom: 2 },
+  cardSub: { fontSize: 11, fontWeight: '500' },
+
+  rowCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, borderRadius: 20 },
 });

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { NutritionLogData } from '../types/nutrition';
+import { NutritionLogData } from '../types/nutrition'; // Maintenant ça existe !
 
 export const useNutritionLogger = () => {
   const queryClient = useQueryClient();
@@ -12,13 +12,8 @@ export const useNutritionLogger = () => {
       setIsSaving(true);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Utilisateur non connecté");
-
-      // On utilise upsert pour mettre à jour la journée si elle existe déjà
-      // Note: Il faut une contrainte unique sur (user_id, log_date) dans votre DB
-      // Si elle n'existe pas, cela créera des doublons.
-      // Alternative sécurisée : Check d'abord.
       
-      // 1. Check si log existe
+      // 1. Check si log existe pour ce jour
       const { data: existing } = await supabase
         .from('nutrition_logs')
         .select('id')
@@ -58,9 +53,10 @@ export const useNutritionLogger = () => {
       return true;
     },
     onSuccess: (_, variables) => {
-      // Invalider le cache pour rafraîchir l'UI immédiatement
-      queryClient.invalidateQueries({ queryKey: ['nutritionLogs', variables.logDate] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] }); // Pour les jauges du dashboard
+      // Rafraîchir l'UI
+      queryClient.invalidateQueries({ queryKey: ['nutritionLog', variables.logDate] }); // Attention au singulier/pluriel de la clé (aligné avec useNutritionLog)
+      queryClient.invalidateQueries({ queryKey: ['dailyNutritionLog'] }); 
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
       setIsSaving(false);
     },
     onError: (e) => {
