@@ -1,306 +1,270 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Platform, Alert, Dimensions, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TextInput, 
+  ScrollView, 
+  TouchableOpacity, 
+  Platform, 
+  Alert, 
+  Dimensions,
+  Image 
+} from 'react-native';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../lib/supabase';
 import * as Haptics from 'expo-haptics';
-import { useTheme } from '../../lib/theme';
-import { useTranslation } from 'react-i18next'; // Import
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next'; 
 
-const { width } = Dimensions.get('window');
+import { useTheme } from '../../lib/theme';
+import { ScreenLayout } from '../../components/ui/ScreenLayout';
+import { GlassCard } from '../../components/ui/GlassCard';
+import { NeonButton } from '../../components/ui/NeonButton';
+import { useUserProfile } from '../../hooks/useUserProfile';
+import { useBodyMetrics } from '../../hooks/useBodyMetrics';
+
+const MODULE_COLOR = '#10b981'; // Vert Santé
 
 export default function BmiScreen() {
+  const { colors, isDark } = useTheme();
   const router = useRouter();
-  const theme = useTheme();
-  const { t } = useTranslation(); // Hook
-  const [loading, setLoading] = useState(false);
+  const { t } = useTranslation();
   
   // Données
+  const { userProfile } = useUserProfile();
+  // On spécifie qu'on veut l'historique 'bmi', mais le mutation addMetric reste générique
+  const { history, addMetric, isLoading } = useBodyMetrics('bmi');
+
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
   const [bmi, setBmi] = useState<number | null>(null);
-  const [history, setHistory] = useState<any[]>([]);
 
-  // Couleur du module (Vert Santé)
-  const MODULE_COLOR = '#10b981'; 
-  const BMI_GRADIENT: [string, string] = ['#10b981', '#34d399'];
-
+  // Initialisation auto
   useEffect(() => {
-    fetchData();
-    fetchHistory();
-  }, []);
+      if (userProfile) {
+          if (userProfile.weight) setWeight(userProfile.weight.toString());
+          if (userProfile.height) setHeight(userProfile.height.toString());
+      }
+  }, [userProfile]);
 
-  const fetchData = async () => {
-    try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-            const { data } = await supabase
-                .from('profiles')
-                .select('height, weight')
-                .eq('id', session.user.id)
-                .single();
-            
-            if (data) {
-                if (data.height) setHeight(data.height.toString());
-                if (data.weight) setWeight(data.weight.toString());
-                
-                // Calcul auto si données présentes
-                if (data.height && data.weight) {
-                    calculate(data.weight, data.height, false);
-                }
-            }
-        }
-    } catch (e) { console.log(e); }
-  };
+  // Animation Jauge
+  const cursorPosition = useSharedValue(0);
 
-  const fetchHistory = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+  const calculate = async () => {
+      const w = parseFloat(weight);
+      const h = parseFloat(height);
 
-        const { data } = await supabase
-            .from('body_metrics')
-            .select('date, value')
-            .eq('user_id', session.user.id)
-            .eq('type', 'bmi')
-            .order('date', { ascending: false })
-            .limit(5);
-
-        if (data) setHistory(data);
-      } catch (e) { console.log(e); }
-  };
-
-  const calculate = async (w = parseFloat(weight), h = parseFloat(height), save = true) => {
       if (!w || !h) {
-          if(save) Alert.alert("Manquant", "Veuillez entrer poids et taille.");
+          Alert.alert("Données manquantes", "Veuillez entrer votre poids et taille.");
           return;
       }
 
-      if (save) {
-          setLoading(true);
-          if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // BMI = Poids(kg) / Taille(m)²
+      // Calcul IMC
       const heightInMeters = h / 100;
       const bmiCalc = w / (heightInMeters * heightInMeters);
       const finalBmi = Math.round(bmiCalc * 10) / 10;
 
       setBmi(finalBmi);
+      
+      // Animation Curseur
+      const percent = Math.min(Math.max(((finalBmi - 15) / (35 - 15)) * 100, 0), 100);
+      cursorPosition.value = withSpring(percent);
 
-      if (save) {
-          await saveResult(finalBmi);
-          setLoading(false);
-      }
-  };
-
-  const saveResult = async (val: number) => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-
-        await supabase.from('body_metrics').insert({
-            user_id: session.user.id,
-            type: 'bmi',
-            value: val,
-            date: new Date().toISOString().split('T')[0]
-        });
-        
-        await fetchHistory();
-      } catch (error: any) {
-          Alert.alert("Erreur", error.message);
-      }
+      // ✅ CORRECTION ICI : On passe un objet { type, value }
+      addMetric.mutate({ type: 'bmi', value: finalBmi });
   };
 
   const getInterpretation = (val: number) => {
-      if (val < 18.5) return { text: t('modules.bmi.underweight'), color: theme.colors.primary };
-      if (val < 25) return { text: t('modules.bmi.normal'), color: theme.colors.success }; 
-      if (val < 30) return { text: t('modules.bmi.overweight'), color: theme.colors.warning }; 
-      return { text: t('modules.bmi.obese'), color: theme.colors.danger }; 
+      if (val < 18.5) return { text: "MAIGREUR", color: '#3b82f6' }; 
+      if (val < 25) return { text: "NORMAL", color: '#10b981' }; 
+      if (val < 30) return { text: "SURPOIDS", color: '#f59e0b' }; 
+      return { text: "OBÉSITÉ", color: '#ef4444' }; 
   };
 
-  // --- STYLES DYNAMIQUES ---
-  const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.bg },
-    safeArea: { flex: 1 },
-    
-    auroraBg: { ...StyleSheet.absoluteFillObject, zIndex: -1 },
-    blob: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.2 },
-  
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
-    backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
-    headerTitle: { color: theme.colors.text, fontWeight: 'bold', letterSpacing: 1 },
-  
-    content: { padding: 20 },
-
-    // Result Card
-    resultCard: {
-        backgroundColor: theme.colors.glass,
-        borderRadius: 24, padding: 30,
-        alignItems: 'center', marginBottom: 30,
-        borderWidth: 1, borderColor: MODULE_COLOR,
-        shadowColor: MODULE_COLOR, shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2, shadowRadius: 10, elevation: 5
-    },
-    resultValue: { fontSize: 56, fontWeight: '900', color: theme.colors.text },
-    resultLabel: { color: theme.colors.textSecondary, fontSize: 12, letterSpacing: 2, marginTop: 5, fontWeight: 'bold' },
-    
-    interpBadge: { 
-        marginTop: 15, paddingHorizontal: 20, paddingVertical: 8, 
-        borderRadius: 20, borderWidth: 1
-    },
-    interpText: { fontWeight: '900', fontSize: 14, letterSpacing: 1 },
-
-    // Gauge Visual
-    gaugeContainer: { width: '100%', height: 10, backgroundColor: theme.colors.border, borderRadius: 5, marginTop: 25, flexDirection: 'row', overflow: 'hidden' },
-    gaugeSection: { flex: 1, height: '100%' },
-    gaugeCursor: { 
-        position: 'absolute', top: -5, width: 4, height: 20, 
-        backgroundColor: theme.colors.text, borderRadius: 2, 
-        zIndex: 10 
-    },
-
-    // Form
-    formSection: { marginBottom: 30 },
-    sectionTitle: { color: theme.colors.textSecondary, fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 15, marginLeft: 5 },
-    
-    inputRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-    inputGroup: { flex: 1 },
-    inputLabel: { color: theme.colors.text, fontSize: 12, fontWeight: 'bold', marginBottom: 8, marginLeft: 5 },
-    input: { 
-        backgroundColor: theme.colors.glass, 
-        height: 50, borderRadius: 15, 
-        paddingHorizontal: 15, color: theme.colors.text, fontSize: 16, fontWeight: 'bold',
-        borderWidth: 1, borderColor: theme.colors.border 
-    },
-
-    calcBtn: { borderRadius: 20, overflow: 'hidden', marginTop: 10 },
-    btnGradient: { padding: 18, alignItems: 'center' },
-    btnText: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: 1 },
-
-    // History
-    historyItem: { 
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        padding: 15, backgroundColor: theme.colors.glass, borderRadius: 15, marginBottom: 10,
-        borderWidth: 1, borderColor: theme.colors.border 
-    },
-    historyDate: { color: theme.colors.textSecondary, fontWeight: '600' },
-    historyVal: { color: theme.colors.text, fontWeight: 'bold' }
-  });
-
   const interpretation = bmi ? getInterpretation(bmi) : null;
-  
-  const cursorPosition = bmi 
-    ? Math.min(Math.max(((bmi - 15) / (35 - 15)) * 100, 0), 100) 
-    : 0;
-
+  const cursorStyle = useAnimatedStyle(() => ({ left: `${cursorPosition.value}%` }));
   const statusColor = interpretation?.color || MODULE_COLOR;
 
   return (
-    <View style={styles.container}>
-      <StatusBar style={theme.isDark ? "light" : "dark"} />
-      
-      {theme.isDark && (
-        <View style={styles.auroraBg}>
-            <View style={[styles.blob, { top: 100, right: -50, backgroundColor: 'rgba(16, 185, 129, 0.15)' }]} />
-        </View>
-      )}
+    <ScreenLayout>
+        <Image 
+            source={require('../../assets/adaptive-icon.png')} 
+            style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.02 : 0.05, transform: [{scale: 1.5}] }]}
+            blurRadius={30}
+        />
 
-      <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
+                <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>{t('modules.bmi.title')}</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>IMC / BMI</Text>
             <View style={{ width: 40 }} />
         </View>
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             
-            {/* RESULTAT */}
-            {/* CORRECTION ICI : Usage ternaire pour éviter le type '0 | object' */}
-            <View style={[styles.resultCard, bmi ? { borderColor: statusColor } : undefined]}>
+            {/* RÉSULTAT */}
+            <GlassCard 
+                style={[
+                    styles.resultCard, 
+                    { 
+                        backgroundColor: isDark ? colors.glass : '#FFFFFF',
+                        borderColor: interpretation ? interpretation.color : (isDark ? colors.border : 'rgba(0,0,0,0.05)'),
+                        shadowColor: statusColor,
+                        shadowOpacity: isDark ? 0 : 0.15,
+                        shadowRadius: 15,
+                        elevation: isDark ? 0 : 5
+                    }
+                ]}
+                intensity={isDark ? 30 : 0}
+            >
                 {bmi ? (
-                    <>
-                        <Text style={styles.resultValue}>{bmi}</Text>
-                        <Text style={styles.resultLabel}>{t('modules.bmi.result')}</Text>
+                    <View style={{ alignItems: 'center', width: '100%' }}>
+                        <Text style={[styles.resultValue, { color: colors.text }]}>{bmi}</Text>
+                        <Text style={[styles.resultLabel, { color: colors.textSecondary }]}>VOTRE INDICE</Text>
                         
-                        <View style={[styles.interpBadge, { borderColor: statusColor, backgroundColor: statusColor + '15' }]}>
-                            <Text style={[styles.interpText, { color: statusColor }]}>
-                                {interpretation?.text.toUpperCase()}
-                            </Text>
+                        <View style={[styles.badge, { backgroundColor: interpretation?.color + '20', borderColor: interpretation?.color }]}>
+                            <Text style={[styles.badgeText, { color: interpretation?.color }]}>{interpretation?.text}</Text>
                         </View>
 
-                        <View style={styles.gaugeContainer}>
-                            <View style={[styles.gaugeSection, { backgroundColor: theme.colors.primary }]} /> 
-                            <View style={[styles.gaugeSection, { backgroundColor: theme.colors.success }]} /> 
-                            <View style={[styles.gaugeSection, { backgroundColor: theme.colors.warning }]} /> 
-                            <View style={[styles.gaugeSection, { backgroundColor: theme.colors.danger }]} /> 
-                            <View style={[styles.gaugeCursor, { left: `${cursorPosition}%` }]} />
+                        <View style={styles.gaugeTrack}>
+                            <View style={[styles.gaugeSegment, { backgroundColor: '#3b82f6', flex: 1 }]} /> 
+                            <View style={[styles.gaugeSegment, { backgroundColor: '#10b981', flex: 2 }]} /> 
+                            <View style={[styles.gaugeSegment, { backgroundColor: '#f59e0b', flex: 1.5 }]} /> 
+                            <View style={[styles.gaugeSegment, { backgroundColor: '#ef4444', flex: 1.5 }]} /> 
+                            <Animated.View style={[styles.cursor, { borderColor: colors.text }, cursorStyle]}>
+                                <View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: colors.text}} />
+                            </Animated.View>
                         </View>
-                    </>
+                    </View>
                 ) : (
-                    <>
-                        <MaterialCommunityIcons name="human-handsup" size={48} color={MODULE_COLOR} style={{opacity: 0.5}} />
-                        <Text style={[styles.resultLabel, {marginTop:15}]}>{t('modules.bmi.calculate')}</Text>
-                    </>
+                    <View style={{ alignItems: 'center', padding: 20 }}>
+                        <MaterialCommunityIcons name="scale-bathroom" size={48} color={MODULE_COLOR} style={{ opacity: 0.5 }} />
+                        <Text style={{ color: colors.textSecondary, marginTop: 10 }}>Entrez vos mesures pour calculer.</Text>
+                    </View>
                 )}
-            </View>
+            </GlassCard>
 
             {/* FORMULAIRE */}
-            <View style={styles.formSection}>
-                <Text style={styles.sectionTitle}>MESURES</Text>
-                
-                <View style={styles.inputRow}>
-                    <View style={[styles.inputGroup, {marginRight: 10}]}>
-                        <Text style={styles.inputLabel}>{t('modules.bmi.input_weight')}</Text>
+            <View style={styles.formContainer}>
+                <View style={styles.row}>
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                        <Text style={[styles.label, { color: colors.text }]}>POIDS (kg)</Text>
                         <TextInput 
-                            style={styles.input} 
-                            keyboardType="numeric" 
-                            value={weight} 
-                            onChangeText={setWeight} 
-                            placeholderTextColor={theme.colors.textSecondary} 
-                            placeholder="70" 
+                            style={[
+                                styles.input, 
+                                { 
+                                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', 
+                                    color: colors.text, 
+                                    borderColor: colors.border 
+                                }
+                            ]}
+                            keyboardType="numeric"
+                            value={weight}
+                            onChangeText={setWeight}
+                            placeholder="70"
+                            placeholderTextColor={colors.textSecondary}
                         />
                     </View>
-                    <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>{t('modules.bmi.input_height')}</Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.label, { color: colors.text }]}>TAILLE (cm)</Text>
                         <TextInput 
-                            style={styles.input} 
-                            keyboardType="numeric" 
-                            value={height} 
-                            onChangeText={setHeight} 
-                            placeholderTextColor={theme.colors.textSecondary} 
-                            placeholder="175" 
+                            style={[
+                                styles.input, 
+                                { 
+                                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', 
+                                    color: colors.text, 
+                                    borderColor: colors.border 
+                                }
+                            ]}
+                            keyboardType="numeric"
+                            value={height}
+                            onChangeText={setHeight}
+                            placeholder="175"
+                            placeholderTextColor={colors.textSecondary}
                         />
                     </View>
                 </View>
 
-                <TouchableOpacity style={styles.calcBtn} onPress={() => calculate(undefined, undefined, true)} disabled={loading}>
-                    <LinearGradient colors={BMI_GRADIENT} start={{x:0, y:0}} end={{x:1, y:0}} style={styles.btnGradient}>
-                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>{t('modules.bmi.calculate')}</Text>}
-                    </LinearGradient>
-                </TouchableOpacity>
+                {/* BOUTON (Style Solide forcé en Mode Clair) */}
+                <NeonButton 
+                    label="CALCULER & SAUVEGARDER" 
+                    onPress={calculate} 
+                    loading={addMetric.isPending}
+                    icon="calculator"
+                    style={{ 
+                        marginTop: 20, 
+                        backgroundColor: isDark ? undefined : MODULE_COLOR,
+                        borderColor: isDark ? undefined : MODULE_COLOR,
+                    }}
+                />
             </View>
 
             {/* HISTORIQUE */}
-            <View style={styles.formSection}>
-                <Text style={styles.sectionTitle}>HISTORIQUE</Text>
-                {history.length > 0 ? history.map((item, i) => (
-                    <View key={i} style={styles.historyItem}>
-                        <Text style={styles.historyDate}>{new Date(item.date).toLocaleDateString()}</Text>
-                        <Text style={styles.historyVal}>{item.value}</Text>
-                    </View>
-                )) : (
-                    <Text style={{color: theme.colors.textSecondary, fontStyle:'italic'}}>Aucun historique.</Text>
-                )}
-            </View>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>HISTORIQUE RÉCENT</Text>
+            
+            {history && history.length > 0 ? (
+                history.map((item: any, index: number) => (
+                    <Animated.View key={index} entering={FadeInDown.delay(index * 100)}>
+                        <GlassCard 
+                            style={[
+                                styles.historyRow, 
+                                { 
+                                    backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : '#fff',
+                                    borderColor: isDark ? colors.border : 'rgba(0,0,0,0.05)',
+                                    shadowColor: "#000",
+                                    shadowOpacity: isDark ? 0 : 0.03,
+                                    shadowRadius: 5,
+                                    elevation: isDark ? 0 : 1
+                                }
+                            ]} 
+                            intensity={0}
+                        >
+                            <Text style={{ color: colors.textSecondary }}>{new Date(item.date).toLocaleDateString()}</Text>
+                            <View style={{flexDirection:'row', alignItems:'center', gap:5}}>
+                                <Text style={{ color: colors.text, fontWeight: 'bold', fontSize: 16 }}>{item.value}</Text>
+                                <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
+                            </View>
+                        </GlassCard>
+                    </Animated.View>
+                ))
+            ) : (
+                <Text style={{ color: colors.textSecondary, fontStyle: 'italic', textAlign: 'center', marginTop: 20 }}>
+                    Aucune donnée enregistrée.
+                </Text>
+            )}
 
+            <View style={{ height: 50 }} />
         </ScrollView>
-      </SafeAreaView>
-    </View>
+    </ScreenLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 10 },
+  backBtn: { padding: 8 },
+  headerTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 1 },
+  content: { padding: 20 },
+
+  resultCard: { padding: 25, borderRadius: 24, marginBottom: 25, borderWidth: 1 },
+  resultValue: { fontSize: 56, fontWeight: '900', letterSpacing: -2 },
+  resultLabel: { fontSize: 12, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
+  
+  badge: { paddingHorizontal: 15, paddingVertical: 5, borderRadius: 12, borderWidth: 1, marginBottom: 25 },
+  badgeText: { fontWeight: '900', fontSize: 12, letterSpacing: 1 },
+
+  gaugeTrack: { flexDirection: 'row', height: 8, width: '100%', borderRadius: 4, overflow: 'visible', marginTop: 10 },
+  gaugeSegment: { height: '100%', marginHorizontal: 1, borderRadius: 2 },
+  cursor: { position: 'absolute', top: -6, marginLeft: -6, width: 12, height: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderRadius: 4 },
+
+  formContainer: { marginBottom: 30 },
+  row: { flexDirection: 'row', justifyContent: 'space-between' },
+  label: { fontSize: 10, fontWeight: 'bold', marginBottom: 8, marginLeft: 5 },
+  input: { height: 50, borderRadius: 16, paddingHorizontal: 15, fontSize: 16, fontWeight: 'bold', borderWidth: 1 },
+
+  sectionTitle: { fontSize: 12, fontWeight: '900', marginBottom: 15, marginLeft: 5, letterSpacing: 1 },
+  historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, marginBottom: 10, borderRadius: 16, borderWidth: 1 },
+});
