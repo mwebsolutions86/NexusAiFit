@@ -11,9 +11,9 @@ import {
   Platform, 
   Alert,
   ActionSheetIOS,
-  KeyboardAvoidingView,
   Linking,
-  Switch // ✅ Import Switch
+  Switch,
+  KeyboardAvoidingView
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -27,14 +27,14 @@ import { supabase } from '../lib/supabase';
 import { ScreenLayout } from '../components/ui/ScreenLayout';
 import { GlassCard } from '../components/ui/GlassCard';
 
-// --- COMPOSANT LIGNE (Mis à jour avec Switch) ---
+// COMPOSANT LIGNE
 const SettingRow = ({ label, value, icon, color, isLast, onPress, type = 'value', switchValue }: any) => {
-    const { colors } = useTheme();
+    const { colors, isDark } = useTheme();
     return (
         <TouchableOpacity 
             onPress={type === 'switch' ? onPress : onPress} 
-            activeOpacity={type === 'switch' ? 1 : 0.7} // Pas d'effet clic sur le switch container
-            style={[styles.row, !isLast && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
+            activeOpacity={type === 'switch' ? 1 : 0.7} 
+            style={[styles.row, !isLast && { borderBottomWidth: 1, borderBottomColor: isDark ? colors.border : '#f1f5f9' }]}
         >
             <View style={[styles.iconBox, { backgroundColor: color + '15' }]}>
                 <MaterialCommunityIcons name={icon} size={20} color={color} />
@@ -52,7 +52,6 @@ const SettingRow = ({ label, value, icon, color, isLast, onPress, type = 'value'
                     </>
                 )}
                 
-                {/* ✅ NOUVEAU TYPE : SWITCH */}
                 {type === 'switch' && (
                     <Switch 
                         value={switchValue}
@@ -60,7 +59,7 @@ const SettingRow = ({ label, value, icon, color, isLast, onPress, type = 'value'
                             if(Platform.OS !== 'web') Haptics.selectionAsync();
                             onPress();
                         }}
-                        trackColor={{ false: '#767577', true: colors.primary }}
+                        trackColor={{ false: '#cbd5e1', true: colors.primary }}
                         thumbColor={'#fff'}
                     />
                 )}
@@ -69,13 +68,24 @@ const SettingRow = ({ label, value, icon, color, isLast, onPress, type = 'value'
     );
 };
 
-// --- COMPOSANT GROUPE ---
+// COMPOSANT GROUPE
 const SettingGroup = ({ title, children }: any) => {
-    const { colors } = useTheme();
+    const { colors, isDark } = useTheme();
     return (
         <View style={styles.groupContainer}>
             {title && <Text style={[styles.groupTitle, { color: colors.textSecondary }]}>{title}</Text>}
-            <GlassCard style={[styles.groupCard, {backgroundColor: colors.glass, borderColor: colors.border}]} intensity={20}>
+            <GlassCard 
+                style={[
+                    styles.groupCard, 
+                    { 
+                        backgroundColor: isDark ? colors.glass : '#FFFFFF', // Blanc pur en light
+                        borderColor: isDark ? colors.border : '#e2e8f0',
+                        shadowOpacity: isDark ? 0 : 0.05,
+                        elevation: isDark ? 0 : 2
+                    }
+                ]} 
+                intensity={isDark ? 20 : 0}
+            >
                 {children}
             </GlassCard>
         </View>
@@ -83,7 +93,6 @@ const SettingGroup = ({ title, children }: any) => {
 };
 
 export default function ProfileScreen() {
-  // ✅ Récupération du toggle et de l'état actuel
   const { colors, toggleTheme, isDark } = useTheme();
   const router = useRouter();
   const { userProfile, refetch, isLoading } = useUserProfile();
@@ -91,8 +100,6 @@ export default function ProfileScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<{key: string, label: string, val: string} | null>(null);
   const [tempValue, setTempValue] = useState('');
-
-  // --- ACTIONS ---
 
   const handleEdit = (key: string, label: string, val: any) => {
       if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -131,10 +138,8 @@ export default function ProfileScreen() {
       }
   };
 
-  const handleExportData = () => {
-      Alert.alert("Exportation", "Données envoyées par email (Simulation).");
-  };
-
+  const handleExportData = () => Alert.alert("Exportation", "Données envoyées par email (Simulation).");
+  
   const handleDeleteAccount = async () => {
       Alert.alert("⚠ ZONE DE DANGER", "Suppression définitive.", [
           { text: "Annuler", style: "cancel" },
@@ -149,15 +154,10 @@ export default function ProfileScreen() {
       ]);
   };
 
-  const openUrl = (url: string) => {
-      Linking.openURL(url).catch(() => Alert.alert("Erreur", "Lien invalide."));
-  };
-
   if (isLoading || !userProfile) return <View />;
 
   return (
     <ScreenLayout>
-        {/* Image de fond adaptative (Visible en Light, subtile en Dark) */}
         <Image 
             source={require('../assets/adaptive-icon.png')} 
             style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02, transform: [{scale: 1.5}] }]}
@@ -169,12 +169,12 @@ export default function ProfileScreen() {
             {/* HEADER */}
             <View style={styles.header}>
                 <View style={styles.avatarContainer}>
-                    <LinearGradient colors={[colors.primary, isDark ? '#000' : '#ccc']} style={styles.avatarBorder}>
-                        <View style={[styles.avatarInner, { backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0', borderColor: isDark ? '#000' : '#fff' }]}>
+                    <LinearGradient colors={[colors.primary, isDark ? '#000' : '#e2e8f0']} style={styles.avatarBorder}>
+                        <View style={[styles.avatarInner, { backgroundColor: isDark ? '#1a1a1a' : '#f8fafc', borderColor: isDark ? '#000' : '#fff' }]}>
                             <Text style={[styles.avatarInitial, { color: colors.text }]}>{userProfile.full_name?.charAt(0) || 'U'}</Text>
                         </View>
                     </LinearGradient>
-                    <View style={[styles.proBadge, { borderColor: isDark ? '#000' : '#fff' }]}>
+                    <View style={[styles.proBadge, { borderColor: isDark ? '#000' : '#fff', backgroundColor: '#FFD700' }]}>
                         <Text style={styles.proText}>{userProfile.tier || 'BASIC'}</Text>
                     </View>
                 </View>
@@ -182,7 +182,7 @@ export default function ProfileScreen() {
                 <Text style={[styles.userEmail, { color: colors.textSecondary }]}>ID: {userProfile.id.slice(0, 8).toUpperCase()}</Text>
             </View>
 
-            {/* BIOMÉTRIE */}
+            {/* SECTIONS */}
             <SettingGroup title="DONNÉES BIOMÉTRIQUES">
                 <SettingRow label="Poids" value={`${userProfile.weight || '--'} kg`} icon="scale-bathroom" color="#f43f5e" onPress={() => handleEdit('weight', 'Poids (kg)', userProfile.weight)} type="editable" />
                 <SettingRow label="Taille" value={`${userProfile.height || '--'} cm`} icon="human-male-height" color="#3b82f6" onPress={() => handleEdit('height', 'Taille (cm)', userProfile.height)} type="editable" />
@@ -190,41 +190,27 @@ export default function ProfileScreen() {
                 <SettingRow label="Sexe" value={userProfile.gender || 'Non défini'} icon="gender-male-female" color="#8b5cf6" isLast onPress={() => showActionSheet('gender', ['Homme', 'Femme'])} type="link" />
             </SettingGroup>
 
-            {/* OBJECTIFS */}
             <SettingGroup title="OBJECTIFS TACTIQUES">
                 <SettingRow label="Objectif" value={userProfile.goal || 'Non défini'} icon="target" color={colors.primary} onPress={() => showActionSheet('goal', ['Prise de masse', 'Perte de poids', 'Maintien'])} type="link" />
                 <SettingRow label="Activité" value={userProfile.activity_level || 'Moyen'} icon="run" color="#f59e0b" isLast onPress={() => showActionSheet('activity_level', ['Sédentaire', 'Actif', 'Athlète'])} type="link" />
             </SettingGroup>
 
-            {/* STATUT */}
             <SettingGroup title="STATUT NEXUS">
                 <SettingRow label="Plan Actuel" value={(userProfile.tier || 'GRATUIT').toUpperCase()} icon="star-face" color="#FFD700" type="link" onPress={() => router.push('/subscription' as any)} />
                 <SettingRow label="Restaurer" value="" icon="restore" color={colors.textSecondary} isLast onPress={() => Alert.alert("Info", "Restauration...")} type="link" />
             </SettingGroup>
 
-            {/* APPLICATION & THÈME */}
             <SettingGroup title="APPLICATION">
-                {/* ✅ LE BOUTON MODE SOMBRE EST ICI */}
-                <SettingRow 
-                    label="Mode Sombre" 
-                    value="" 
-                    icon="theme-light-dark" 
-                    color={colors.text} 
-                    type="switch" 
-                    switchValue={isDark} 
-                    onPress={toggleTheme} 
-                />
+                <SettingRow label="Mode Sombre" value="" icon="theme-light-dark" color={colors.text} type="switch" switchValue={isDark} onPress={toggleTheme} />
                 <SettingRow label="Notifications" value="Activé" icon="bell-ring" color={colors.text} type="link" />
                 <SettingRow label="Unités" value="Métrique" icon="ruler" color={colors.text} isLast type="link" />
             </SettingGroup>
 
-            {/* LEGAL & AIDE */}
             <SettingGroup title="LÉGAL & AIDE">
                 <SettingRow label="Support Client" value="" icon="lifebuoy" color={colors.text} type="link" onPress={() => router.push('/profile/support' as any)} />
                 <SettingRow label="Mentions Légales" value="CGU & Confidentialité" icon="file-document-outline" color={colors.textSecondary} isLast type="link" onPress={() => router.push('/profile/legal' as any)} />
             </SettingGroup>
 
-            {/* DANGER */}
             <SettingGroup title="DONNÉES & SÉCURITÉ">
                 <SettingRow label="Exporter" value="JSON" icon="database-export" color={colors.primary} type="link" onPress={handleExportData} />
                 <SettingRow label="Supprimer compte" value="" icon="delete-alert" color={colors.danger} isLast type="danger" onPress={handleDeleteAccount} />
@@ -234,7 +220,7 @@ export default function ProfileScreen() {
                 <Text style={[styles.logoutText, { color: colors.danger }]}>DÉCONNEXION</Text>
             </TouchableOpacity>
             
-            <View style={[styles.disclaimerBox, { borderTopColor: colors.border }]}>
+            <View style={[styles.disclaimerBox, { borderTopColor: isDark ? colors.border : '#e2e8f0' }]}>
                 <MaterialCommunityIcons name="alert-decagram" size={16} color={colors.textSecondary} style={{marginBottom: 5}} />
                 <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
                     AVERTISSEMENT SYSTÈME : NEXUS est une IA d'assistance. Consultez un médecin avant tout programme.
@@ -246,10 +232,9 @@ export default function ProfileScreen() {
 
         </ScrollView>
 
-        {/* MODALE */}
         <Modal animationType="fade" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
             <View style={styles.modalOverlay}>
-                <BlurView intensity={20} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+                <BlurView intensity={40} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
                     <GlassCard style={[styles.modalContent, { backgroundColor: isDark ? '#111' : '#fff' }]} intensity={80}>
                         <Text style={[styles.modalTitle, { color: colors.text }]}>MODIFIER</Text>
@@ -280,7 +265,7 @@ const styles = StyleSheet.create({
   avatarBorder: { width: 100, height: 100, borderRadius: 50, padding: 3, justifyContent: 'center', alignItems: 'center' },
   avatarInner: { width: '100%', height: '100%', borderRadius: 50, justifyContent: 'center', alignItems: 'center', borderWidth: 4 },
   avatarInitial: { fontSize: 40, fontWeight: '900' },
-  proBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#FFD700', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, borderWidth: 2 },
+  proBadge: { position: 'absolute', bottom: 0, right: 0, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, borderWidth: 2 },
   proText: { fontSize: 10, fontWeight: '900', color: '#000' },
   userName: { fontSize: 24, fontWeight: '900', letterSpacing: 0.5 },
   userEmail: { fontSize: 12, marginTop: 2, opacity: 0.6, letterSpacing: 1 },

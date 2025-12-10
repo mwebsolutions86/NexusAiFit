@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -8,13 +8,21 @@ import {
   TouchableOpacity, 
   Alert, 
   Platform, 
-  Dimensions, 
-  Image 
+  Dimensions 
 } from 'react-native';
+import { Image } from 'expo-image'; 
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { 
+  FadeInDown, 
+  FadeInUp, 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withRepeat, 
+  withTiming, 
+  withSequence 
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 
@@ -32,60 +40,94 @@ import { GlassButton } from '../../components/ui/GlassButton';
 
 const { width } = Dimensions.get('window');
 
-// --- COMPOSANT : CARTE MISSION (JOUR) ---
+// --- 🛠 UTILITAIRE DATE (Correction) ---
+const getTodayIndex = () => {
+  const day = new Date().getDay(); 
+  // Transforme 0 (Dimanche) -> 6, 1 (Lundi) -> 0
+  return (day + 6) % 7; 
+};
+
+// --- 👻 SKELETON ---
+const SkeletonItem = ({ style, width, height, borderRadius = 8 }: any) => {
+    const { colors, isDark } = useTheme();
+    const opacity = useSharedValue(0.3);
+    useEffect(() => {
+        opacity.value = withRepeat(withSequence(withTiming(0.6, {duration:800}), withTiming(0.3, {duration:800})), -1, true);
+    }, []);
+    const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+    const bgColor = isDark ? colors.primary + '20' : '#cbd5e1'; 
+    return <Animated.View style={[{ backgroundColor: bgColor, width, height, borderRadius, overflow: 'hidden' }, style, animatedStyle]} />;
+};
+
+const WorkoutSkeleton = () => (
+    <View style={{ padding: 20, gap: 20 }}>
+        {/* Header */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
+            <View style={{ gap: 8 }}>
+                <SkeletonItem width={120} height={20} />
+                <SkeletonItem width={80} height={12} />
+            </View>
+            <SkeletonItem width={40} height={40} borderRadius={20} />
+        </View>
+        {/* Carousel */}
+        <View style={{ flexDirection: 'row', gap: 15 }}>
+            <GlassCard style={{ width: 150, height: 160, padding: 15, justifyContent: 'space-between' }}><View/></GlassCard>
+            <GlassCard style={{ width: 150, height: 160, padding: 15, justifyContent: 'space-between' }}><View/></GlassCard>
+        </View>
+        {/* Liste */}
+        <View style={{ gap: 10, marginTop: 10 }}>
+            <SkeletonItem width={100} height={14} />
+            <SkeletonItem width="100%" height={80} borderRadius={16} />
+            <SkeletonItem width="100%" height={80} borderRadius={16} />
+        </View>
+    </View>
+);
+
+// --- COMPOSANTS UI ---
+
 const MissionCard = ({ day, isActive, onPress, index }: any) => {
   const { colors, isDark } = useTheme();
   
+  const titleColor = isDark ? colors.text : '#1e293b';
+  const subColor = isDark ? colors.textSecondary : '#64748b';
+  const activeColor = isDark ? colors.primary : '#2563eb'; 
+
   return (
     <TouchableOpacity 
       onPress={() => { if (Platform.OS !== 'web') Haptics.selectionAsync(); onPress(); }}
-      activeOpacity={0.9}
+      activeOpacity={0.8}
       style={{ marginRight: 15 }}
     >
       <GlassCard 
-        style={[
-            styles.missionCard, 
-            { 
-                backgroundColor: isActive 
-                    ? (isDark ? colors.primary + '20' : colors.primary + '10') 
-                    : (isDark ? 'transparent' : '#FFFFFF'),
-                
-                borderColor: isActive 
-                    ? colors.primary 
-                    : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'),
-                
-                shadowColor: "#000",
-                shadowOpacity: isDark ? 0 : 0.05,
-                shadowOffset: { width: 0, height: 4 },
-                shadowRadius: 8,
-                elevation: isDark ? 0 : 3
-            }
-        ]}
-        intensity={isDark ? (isActive ? 40 : 15) : 0}
+        variant={isActive ? "neon" : "default"}
+        style={{ width: 150, height: 160, justifyContent: 'space-between', padding: 15 }}
       >
-        {isActive && <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: colors.primary }} />}
+        {isActive && <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: activeColor }} />}
         
-        <View style={styles.cardTop}>
-            <Text style={[styles.missionDay, { color: isActive ? colors.primary : colors.textSecondary, fontWeight: isActive ? '900' : '600' }]}>
-                {day.day ? day.day.toUpperCase() : `JOUR ${index + 1}`}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ color: isActive ? activeColor : subColor, fontWeight: isActive ? '900' : '600', fontSize: 11, letterSpacing: 1 }}>
+                {day.day ? day.day.toUpperCase().slice(0, 3) : `J${index + 1}`}
             </Text>
-            {isActive && <Ionicons name="radio-button-on" size={14} color={colors.primary} />}
+            {isActive && <Ionicons name="radio-button-on" size={12} color={activeColor} />}
         </View>
         
         <View style={{ flex: 1, justifyContent: 'center' }}>
-            <Text style={[styles.missionFocus, { color: colors.text }]} numberOfLines={3}>{day.focus || "Repos"}</Text>
+            <Text style={{ color: titleColor, fontSize: 16, fontWeight: '800', lineHeight: 20 }} numberOfLines={3}>
+                {day.focus || "Repos"}
+            </Text>
         </View>
         
-        <View style={styles.cardBottom}>
-            <MaterialCommunityIcons name="dumbbell" size={14} color={colors.textSecondary} />
-            <Text style={[styles.missionMeta, { color: colors.textSecondary }]}>{(day.exercises?.length || 0)} EXERCICES</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="dumbbell" size={14} color={subColor} />
+            <Text style={{ color: subColor, fontSize: 10, fontWeight: 'bold' }}>
+                {(day.exercises?.length || 0)} EXOS
+            </Text>
         </View>
       </GlassCard>
     </TouchableOpacity>
   );
 };
 
-// --- COMPOSANT : LIGNE EXERCICE TACTIQUE ---
 const TacticalExercise = ({ exercise, index, isSessionActive, isCompleted, onToggle }: any) => {
   const { colors, isDark } = useTheme();
   const [expanded, setExpanded] = useState(false);
@@ -96,61 +138,77 @@ const TacticalExercise = ({ exercise, index, isSessionActive, isCompleted, onTog
       await Linking.openURL(`https://www.youtube.com/results?search_query=${query}`);
   };
 
+  const cardBg = isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF';
+  const borderColor = isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0'; 
+  const badgeBg = isDark ? colors.primary + '15' : '#f1f5f9';
+  const titleColor = isDark ? colors.text : '#0f172a'; 
+  const metaColor = isDark ? colors.primary : '#3b82f6'; 
+
   return (
     <Animated.View entering={FadeInDown.delay(index * 50).springify()} style={{ marginBottom: 12 }}>
         <View 
             style={[
                 styles.exerciseCard, 
                 { 
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF',
-                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                    backgroundColor: cardBg,
+                    borderColor: borderColor,
+                    opacity: isCompleted ? 0.5 : 1,
                     borderWidth: 1,
-                    opacity: isCompleted ? 0.6 : 1,
-                    shadowColor: "#000",
-                    shadowOpacity: isDark ? 0 : 0.03,
-                    shadowRadius: 5,
-                    elevation: isDark ? 0 : 2
+                    elevation: 0,
+                    shadowOpacity: 0
                 }
             ]}
         >
             <TouchableOpacity onPress={() => setExpanded(!expanded)} style={styles.exerciseHeader} activeOpacity={0.7}>
                 <View style={{flex: 1}}>
-                    <Text style={[styles.exName, { color: colors.text, textDecorationLine: isCompleted ? 'line-through' : 'none' }]}>{exercise.name}</Text>
+                    <Text style={[styles.exName, { color: titleColor, textDecorationLine: isCompleted ? 'line-through' : 'none' }]}>
+                        {exercise.name}
+                    </Text>
                     <View style={styles.exMetaRow}>
-                        <View style={[styles.badge, { backgroundColor: isDark ? colors.primary + '15' : colors.bg }]}>
-                            <Text style={[styles.exMeta, { color: colors.primary }]}>{exercise.sets} SÉRIES</Text>
+                        <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                            <Text style={[styles.exMeta, { color: metaColor }]}>{exercise.sets} SÉRIES</Text>
                         </View>
-                        <Text style={{ color: colors.textSecondary, fontSize: 10 }}>•</Text>
-                        <View style={[styles.badge, { backgroundColor: isDark ? colors.primary + '15' : colors.bg }]}>
-                            <Text style={[styles.exMeta, { color: colors.primary }]}>{exercise.reps} REPS</Text>
+                        <Text style={{ color: isDark ? colors.textSecondary : '#94a3b8', fontSize: 10 }}>•</Text>
+                        <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                            <Text style={[styles.exMeta, { color: metaColor }]}>{exercise.reps} REPS</Text>
                         </View>
                     </View>
                 </View>
                 
                 {isSessionActive ? (
-                    <TouchableOpacity onPress={onToggle} style={[styles.checkBtn, { borderColor: isCompleted ? colors.success : colors.border, backgroundColor: isCompleted ? colors.success : 'transparent' }]}>
-                        {isCompleted && <Ionicons name="checkmark" size={16} color={isDark ? "#fff" : "#000"} />}
+                    <TouchableOpacity 
+                        onPress={onToggle} 
+                        style={[
+                            styles.checkBtn, 
+                            { 
+                                borderColor: isCompleted ? colors.success : borderColor, 
+                                backgroundColor: isCompleted ? colors.success : 'transparent',
+                                transform: [{scale: isCompleted ? 1.1 : 1}]
+                            }
+                        ]}
+                    >
+                        {isCompleted && <Ionicons name="checkmark" size={18} color="#fff" />}
                     </TouchableOpacity>
                 ) : (
-                    <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={colors.textSecondary} />
+                    <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={isDark ? colors.textSecondary : '#94a3b8'} />
                 )}
             </TouchableOpacity>
             
             {expanded && (
-                <View style={[styles.exerciseDetails, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#F9FAFB', borderTopColor: colors.border, borderTopWidth: 1 }]}>
+                <View style={[styles.exerciseDetails, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#f8fafc', borderTopColor: borderColor }]}>
                     <View style={styles.detailRow}>
                         <MaterialCommunityIcons name="timer-sand" size={14} color={colors.warning} />
-                        <Text style={[styles.detailText, { color: colors.textSecondary }]}>Repos: {exercise.rest}s</Text>
+                        <Text style={[styles.detailText, { color: isDark ? colors.textSecondary : '#64748b' }]}>Repos: {exercise.rest}s</Text>
                     </View>
                     {exercise.notes && (
                         <View style={[styles.detailRow, { alignItems: 'flex-start' }]}>
                             <MaterialCommunityIcons name="information-outline" size={14} color={colors.primary} style={{marginTop: 2}} />
-                            <Text style={[styles.detailText, { color: colors.textSecondary, flex: 1 }]}>{exercise.notes}</Text>
+                            <Text style={[styles.detailText, { color: isDark ? colors.textSecondary : '#64748b', flex: 1 }]}>{exercise.notes}</Text>
                         </View>
                     )}
-                    <TouchableOpacity onPress={openDemo} style={[styles.demoBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff', borderColor: colors.border }]}>
-                        <MaterialCommunityIcons name="youtube" size={16} color="#FF0000" />
-                        <Text style={[styles.demoText, { color: colors.text }]}>VOIR LA DÉMO</Text>
+                    <TouchableOpacity onPress={openDemo} style={[styles.demoBtn, { borderColor: borderColor }]}>
+                        <MaterialCommunityIcons name="youtube" size={16} color="#ef4444" />
+                        <Text style={[styles.demoText, { color: titleColor }]}>VOIR LA DÉMO</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -163,16 +221,20 @@ export default function WorkoutScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   
-  const { userProfile } = useUserProfile();
-  const { data: plans } = useActivePlans(userProfile?.id);
+  const { userProfile, isLoading: profileLoading } = useUserProfile();
+  const { data: plans, isLoading: isPlansLoading } = useActivePlans(userProfile?.id);
   const { generateWorkout, loading: isGenerating } = useAIWorkout();
   const { saveWorkout, isSaving } = useWorkoutLogger();
   const { isPremium } = useSubscription();
 
   const activePlan = plans?.workoutPlan ? { content: plans.workoutPlan } : null;
+  const isLoading = profileLoading || isPlansLoading;
 
   const [userFocus, setUserFocus] = useState('');
-  const [activeDayIndex, setActiveDayIndex] = useState(0);
+  
+  // ✅ INITIALISATION INTELLIGENTE : Pointer sur le jour actuel
+  const [activeDayIndex, setActiveDayIndex] = useState(getTodayIndex());
+  
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [completedExercises, setCompletedExercises] = useState<Record<string, boolean>>({});
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -181,21 +243,14 @@ export default function WorkoutScreen() {
 
   const handleGenerate = async () => {
     if (!userFocus.trim()) return Alert.alert("Cible Manquante", "Définissez un objectif.");
-    if (!userProfile) return Alert.alert("Erreur", "Profil non chargé.");
-    
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       await generateWorkout(userProfile, userFocus);
       setUserFocus('');
       setIsRegenerating(false);
-      Alert.alert("Plan Tactique Généré", "Votre mission est prête.");
     } catch (e: any) {
-        if (e.message.includes("QUOTA_EXCEEDED")) {
-            Alert.alert("Limite Atteinte", "Passez ELITE pour générer plus de plans.");
-        } else {
-            Alert.alert("Erreur", e.message || "Problème de connexion.");
-        }
+        Alert.alert("Erreur", e.message);
     }
   };
 
@@ -239,33 +294,19 @@ export default function WorkoutScreen() {
 
   const renderGenerator = () => (
     <Animated.View entering={FadeInUp.springify()}>
-        <View 
-            style={[
-                styles.generatorCard, 
-                { 
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#FFFFFF',
-                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                    shadowColor: "#000",
-                    shadowOpacity: isDark ? 0 : 0.05,
-                    shadowRadius: 10,
-                    elevation: isDark ? 0 : 3
-                }
-            ]}
-        >
-            <View style={[styles.iconCircle, { backgroundColor: colors.primary + '15' }]}>
+        <View style={[styles.generatorCard, { borderColor: isDark ? colors.border : '#e2e8f0', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff' }]}>
+            <View style={[styles.iconCircle, { backgroundColor: isDark ? colors.primary + '15' : '#e0f2fe' }]}>
                 <MaterialCommunityIcons name="dumbbell" size={32} color={colors.primary} />
             </View>
-            <Text style={[styles.genTitle, {color: colors.text}]}>
-                {activePlan ? "NOUVELLE STRATÉGIE" : "GÉNÉRATEUR TACTIQUE"}
-            </Text>
-            <Text style={[styles.genSub, {color: colors.textSecondary}]}>L'IA crée votre programme sur mesure.</Text>
+            <Text style={[styles.genTitle, {color: isDark ? colors.text : '#0f172a'}]}>GÉNÉRATEUR TACTIQUE</Text>
+            <Text style={[styles.genSub, {color: isDark ? colors.textSecondary : '#64748b'}]}>L'IA crée votre programme sur mesure.</Text>
             
-            <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : colors.bg }]}>
+            <View style={[styles.inputWrapper, { borderColor: isDark ? colors.border : '#cbd5e1', backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#f8fafc' }]}>
                 <Text style={[styles.label, {color: colors.primary}]}>OBJECTIF</Text>
                 <TextInput 
-                    style={[styles.input, {color: colors.text}]}
+                    style={[styles.input, {color: isDark ? colors.text : '#0f172a'}]}
                     placeholder="Ex: Pectoraux, Force, Cardio..."
-                    placeholderTextColor={colors.textSecondary}
+                    placeholderTextColor={isDark ? colors.textSecondary : '#94a3b8'}
                     value={userFocus}
                     onChangeText={setUserFocus}
                 />
@@ -276,16 +317,12 @@ export default function WorkoutScreen() {
                 onPress={handleGenerate} 
                 loading={isGenerating} 
                 icon="flash"
-                style={{
-                    // Force le bleu en mode clair
-                    backgroundColor: isDark ? undefined : colors.primary,
-                    borderColor: isDark ? undefined : colors.primary
-                }}
+                style={{ backgroundColor: isDark ? undefined : colors.primary }}
             />
 
             {activePlan && (
                 <TouchableOpacity onPress={() => setIsRegenerating(false)} style={{marginTop: 20}}>
-                    <Text style={{color: colors.textSecondary, textDecorationLine: 'underline', fontSize: 12}}>Annuler et revenir au plan actif</Text>
+                    <Text style={{color: isDark ? colors.textSecondary : '#64748b', textDecorationLine: 'underline', fontSize: 12}}>Annuler et revenir</Text>
                 </TouchableOpacity>
             )}
         </View>
@@ -303,7 +340,7 @@ export default function WorkoutScreen() {
           <View>
               <View style={styles.planHeader}>
                   <View style={{ flex: 1 }}>
-                      <Text style={[styles.planTitle, { color: colors.text }]} numberOfLines={1}>{content.title}</Text>
+                      <Text style={[styles.planTitle, { color: isDark ? colors.text : '#0f172a' }]} numberOfLines={1}>{content.title}</Text>
                       <Text style={[styles.planSub, { color: isSessionActive ? colors.success : colors.primary }]}>
                           {isSessionActive ? "🟢 MISSION EN COURS" : `PLAN ACTIF • ${content.days.length} JOURS`}
                       </Text>
@@ -312,16 +349,7 @@ export default function WorkoutScreen() {
                   {!isSessionActive && (
                       <GlassButton 
                         icon="refresh" 
-                        onPress={() => { 
-                            Alert.alert(
-                                "Nouvelle Mission ?", 
-                                "Générer un nouveau plan remplacera l'actuel.", 
-                                [
-                                    { text: "Annuler", style: "cancel" },
-                                    { text: "Nouveau Plan", onPress: () => setIsRegenerating(true) } 
-                                ]
-                            );
-                        }} 
+                        onPress={() => Alert.alert("Nouveau Plan ?", "Cela remplacera l'actuel.", [{ text: "Annuler" }, { text: "Nouveau", onPress: () => setIsRegenerating(true) }])} 
                         size={20} 
                       />
                   )}
@@ -334,9 +362,7 @@ export default function WorkoutScreen() {
               >
                   {content.days.map((d: any, i: number) => (
                       <MissionCard 
-                        key={i} 
-                        day={d} 
-                        index={i}
+                        key={i} day={d} index={i}
                         isActive={activeDayIndex === i}
                         onPress={() => !isSessionActive && setActiveDayIndex(i)} 
                       />
@@ -344,14 +370,12 @@ export default function WorkoutScreen() {
               </ScrollView>
 
               <View style={{ marginBottom: 20, marginTop: 5 }}>
-                  <Text style={{color: colors.textSecondary, fontSize: 10, fontWeight: 'bold', marginBottom: 10, marginLeft: 5, letterSpacing: 1}}>
+                  <Text style={{color: isDark ? colors.textSecondary : '#64748b', fontSize: 10, fontWeight: 'bold', marginBottom: 10, marginLeft: 5, letterSpacing: 1}}>
                       SÉQUENCE OPÉRATIONNELLE ({day.exercises?.length || 0})
                   </Text>
                   {day.exercises?.map((ex: any, i: number) => (
                       <TacticalExercise 
-                        key={i}
-                        index={i}
-                        exercise={ex}
+                        key={i} index={i} exercise={ex}
                         isSessionActive={isSessionActive}
                         isCompleted={!!completedExercises[`ex_${i}`]}
                         onToggle={() => toggleExercise(i)}
@@ -364,17 +388,21 @@ export default function WorkoutScreen() {
 
   return (
     <ScreenLayout>
-        {/* FOND AMBIANT */}
         <Image 
             source={require('../../assets/adaptive-icon.png')} 
-            style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02, transform: [{scale: 1.5}] }]}
+            style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02 }]}
             blurRadius={40}
+            contentFit="cover"
+        />
+        <LinearGradient 
+            colors={isDark ? [colors.primary, 'transparent'] : ['#bfdbfe', 'transparent']} 
+            style={{position:'absolute', top:0, left:0, right:0, height:200, opacity: isDark ? 0.1 : 0.3}} 
         />
 
         <View style={styles.header}>
-            <Text style={[styles.headerTitle, {color: colors.text}]}>CENTRE TACTIQUE</Text>
+            <Text style={[styles.headerTitle, {color: isDark ? colors.text : '#0f172a'}]}>CENTRE TACTIQUE</Text>
             <TouchableOpacity onPress={() => isPremium ? router.push('/features/workout_log' as any) : null}>
-                <MaterialCommunityIcons name="history" size={24} color={isPremium ? colors.primary : colors.textSecondary} />
+                <MaterialCommunityIcons name="history" size={24} color={isPremium ? colors.primary : (isDark ? colors.textSecondary : '#94a3b8')} />
             </TouchableOpacity>
         </View>
 
@@ -383,41 +411,28 @@ export default function WorkoutScreen() {
             contentContainerStyle={[styles.content, { paddingBottom: 150 }]} 
             showsVerticalScrollIndicator={false}
         >
-            {(activePlan && !isRegenerating) ? renderActivePlan() : renderGenerator()}
+            {isLoading ? <WorkoutSkeleton /> : ((activePlan && !isRegenerating) ? renderActivePlan() : renderGenerator())}
         </ScrollView>
 
         {/* --- FLOATING FOOTER --- */}
         {(activePlan && !isRegenerating) && (
             <LinearGradient 
-                // Le dégradé du bas s'adapte pour que le bouton ne flotte pas dans le vide
                 colors={isDark ? ['transparent', 'rgba(0,0,0,0.9)', '#000'] : ['transparent', 'rgba(255,255,255,0.9)', '#FFFFFF']} 
                 style={[styles.floatingFooter, { bottom: Platform.OS === 'ios' ? 85 : 65 }]}
             >
                 {!isSessionActive ? (
-                    // ✅ CONDITION STRICTE : Si Dark -> Neon, Si Light -> SolidBlue
                     isDark ? (
-                        <NeonButton 
-                            label="LANCER LA MISSION" 
-                            icon="play" 
-                            onPress={handleStartSession} 
-                            style={{ width: '100%' }} 
-                        />
+                        <NeonButton label="LANCER LA MISSION" icon="play" onPress={handleStartSession} style={{ width: '100%' }} />
                     ) : (
-                        <TouchableOpacity 
-                            onPress={handleStartSession}
-                            activeOpacity={0.8}
-                            style={[styles.solidButton, { backgroundColor: colors.primary }]}
-                        >
+                        <TouchableOpacity onPress={handleStartSession} activeOpacity={0.8} style={[styles.solidButton, { backgroundColor: colors.primary }]}>
                             <MaterialCommunityIcons name="play" size={24} color="#FFF" style={{ marginRight: 10 }} />
                             <Text style={styles.solidButtonText}>LANCER LA MISSION</Text>
                         </TouchableOpacity>
                     )
                 ) : (
-                    // Bouton Stop (Rouge, on garde le NeonButton qui gère bien les styles danger)
                     <NeonButton 
                         label={isSaving ? "SYNCHRONISATION..." : "TERMINER MISSION"} 
-                        icon="stop" 
-                        onPress={handleFinish} 
+                        icon="stop" onPress={handleFinish} 
                         style={{ backgroundColor: colors.danger, borderColor: colors.danger, width: '100%' }} 
                     />
                 )}
@@ -432,7 +447,7 @@ const styles = StyleSheet.create({
     headerTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 2 },
     content: { padding: 20 },
 
-    generatorCard: { padding: 30, alignItems: 'center', borderRadius: 24, borderWidth: 1 },
+    generatorCard: { padding: 30, alignItems: 'center', borderRadius: 24, borderWidth: 1, shadowOpacity: 0, elevation: 0 },
     iconCircle: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
     genTitle: { fontSize: 18, fontWeight: '900', marginBottom: 5, letterSpacing: 1 },
     genSub: { textAlign: 'center', marginBottom: 25, fontSize: 12 },
@@ -444,23 +459,15 @@ const styles = StyleSheet.create({
     planTitle: { fontSize: 20, fontWeight: '900', fontStyle: 'italic', marginRight: 10 },
     planSub: { fontSize: 10, fontWeight: 'bold', marginTop: 4, letterSpacing: 1 },
 
-    missionCard: { width: 160, height: 220, padding: 20, justifyContent: 'space-between', borderRadius: 24, borderWidth: 1 },
-    cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    cardBottom: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    
-    missionDay: { fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-    missionFocus: { fontSize: 20, fontWeight: '900', lineHeight: 24, letterSpacing: -0.5 },
-    missionMeta: { fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5 },
-
-    exerciseCard: { marginBottom: 12, padding: 0, overflow: 'hidden', borderRadius: 16 },
+    exerciseCard: { marginBottom: 12, padding: 0, overflow: 'hidden', borderRadius: 16, borderWidth: 1 },
     exerciseHeader: { flexDirection: 'row', alignItems: 'center', padding: 15 },
     exName: { fontSize: 15, fontWeight: 'bold', marginBottom: 4 },
     exMetaRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
     exMeta: { fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5 },
     badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-    checkBtn: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    checkBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
     
-    exerciseDetails: { padding: 15, paddingTop: 10, paddingBottom: 20 },
+    exerciseDetails: { padding: 15, paddingTop: 10, paddingBottom: 20, borderTopWidth: 1 },
     detailRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
     detailText: { fontSize: 12 },
 
@@ -469,24 +476,10 @@ const styles = StyleSheet.create({
 
     floatingFooter: { position: 'absolute', left: 0, right: 0, padding: 20, paddingTop: 30 },
 
-    // ✅ NOUVEAU STYLE : Bouton Solide pour Mode Clair
     solidButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        paddingVertical: 16,
-        borderRadius: 16,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        width: '100%', paddingVertical: 16, borderRadius: 16,
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2,
     },
-    solidButtonText: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '900',
-        letterSpacing: 1,
-    }
+    solidButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900', letterSpacing: 1 }
 });

@@ -67,4 +67,73 @@ export interface NutritionLogDB {
   total_calories: number;
   total_protein: number;
   daily_note?: string;
+  water_ml?: number;
+}
+// types/nutrition.ts
+
+// --- PLAN NUTRITIONNEL (Table: meal_plans) ---
+
+export interface MealItem {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs?: number;
+  fat?: number;
+  notes?: string;
+  ingredients?: string;
+}
+
+export interface Meal {
+  name: string;
+  items: MealItem[];
+}
+
+export interface NutritionDay {
+  day: string;
+  meals: Meal[];
+}
+
+export interface NutritionPlanContent {
+  title: string;
+  days: NutritionDay[];
+}
+
+export interface MealPlanDB {
+  id: string;
+  user_id: string;
+  title: string;
+  content: NutritionPlanContent;
+  is_active: boolean;
+  week_number: number;
+  created_at: string;
+}
+
+// --- SUIVI JOURNALIER (Table: nutrition_logs) ---
+
+export interface ConsumedItem {
+  name: string;
+  mealName: string;
+  calories: number;
+  protein: number;
+  eatenAt: string;
+}
+
+export interface NutritionLogData {
+  logDate: string;
+  mealsStatus: ConsumedItem[];
+  totalCalories: number;
+  totalProtein: number;
+  note?: string;
+}
+
+// ✅ CORRECTION ICI : Ajout de water_ml
+export interface NutritionLogDB {
+  id: string;
+  user_id: string;
+  log_date: string;
+  meals_status: ConsumedItem[]; // JSONB
+  total_calories: number;
+  total_protein: number;
+  daily_note?: string;
+  water_ml?: number; // 👈 La propriété manquante
 }

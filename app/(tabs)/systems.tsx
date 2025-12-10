@@ -8,12 +8,14 @@ import {
   Alert, 
   Platform,
   Dimensions,
-  Image
+
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import Animated, { FadeInRight } from 'react-native-reanimated';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInRight, FadeInDown } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 // Hooks & UI
@@ -25,7 +27,7 @@ import { GlassCard } from '../../components/ui/GlassCard';
 const { width } = Dimensions.get('window');
 
 export default function SystemsScreen() {
-  const { colors, isDark } = useTheme(); // ✅ Ajout isDark pour l'adaptation
+  const { colors, isDark } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   
@@ -114,29 +116,48 @@ export default function SystemsScreen() {
     router.push(item.route as any);
   };
 
+  // --- COULEURS HARMONISÉES ---
+  const headerTitleColor = isDark ? colors.text : '#0f172a';
+  const subtitleColor = isDark ? colors.textSecondary : '#64748b';
+  
+  const cardBg = isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF';
+  const cardBorder = isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0';
+  const iconBgLocked = isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9';
+
   return (
     <ScreenLayout>
-        {/* FOND GRAPHIQUE (Adaptatif) */}
+        {/* FOND (Même que Workout/Dashboard) */}
         <Image 
             source={require('../../assets/adaptive-icon.png')} 
-            style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.02 : 0.05, transform: [{scale: 1.5}] }]}
-            blurRadius={20}
+            style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02, transform: [{scale: 1.5}] }]}
+            blurRadius={40}
+            contentFit="cover"
+        />
+        <LinearGradient 
+            colors={isDark ? [colors.primary, 'transparent'] : ['#bfdbfe', 'transparent']} 
+            style={{position:'absolute', top:0, left:0, right:0, height:200, opacity: isDark ? 0.1 : 0.25}} 
         />
 
         {/* HEADER */}
-        <View style={styles.header}>
+        <Animated.View entering={FadeInDown.duration(600)} style={styles.header}>
             <View>
-                <Text style={[styles.headerTitle, { color: colors.text }]}>SYSTÈMES</Text>
-                <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-                    Arsenal complet d'optimisation.
+                <Text style={[styles.headerTitle, { color: headerTitleColor }]}>SYSTÈMES</Text>
+                <Text style={[styles.headerSubtitle, { color: subtitleColor }]}>
+                    ARSENAL COMPLET D'OPTIMISATION
                 </Text>
             </View>
-            <View style={[styles.badge, { borderColor: isPremium ? colors.primary : colors.textSecondary }]}>
-                <Text style={[styles.badgeText, { color: isPremium ? colors.primary : colors.textSecondary }]}>
+            <View style={[
+                styles.badge, 
+                { 
+                    borderColor: isPremium ? colors.primary : colors.textSecondary,
+                    backgroundColor: isDark ? 'transparent' : (isPremium ? colors.primary + '10' : '#f1f5f9')
+                }
+            ]}>
+                <Text style={[styles.badgeText, { color: isPremium ? colors.primary : (isDark ? colors.textSecondary : '#64748b') }]}>
                     {isPremium ? "ELITE" : "BASIC"}
                 </Text>
             </View>
-        </View>
+        </Animated.View>
 
         <ScrollView 
             contentContainerStyle={styles.scrollContent}
@@ -145,12 +166,15 @@ export default function SystemsScreen() {
             {SECTIONS.map((section, sectionIndex) => (
                 <View key={section.id} style={styles.sectionContainer}>
                     
+                    {/* Titre Section */}
                     <View style={styles.sectionHeader}>
                         <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
                             <View style={{width: 3, height: 16, backgroundColor: colors.primary, borderRadius: 2}} />
-                            <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.title}</Text>
+                            <Text style={[styles.sectionTitle, { color: isDark ? colors.text : '#1e293b' }]}>
+                                {section.title}
+                            </Text>
                         </View>
-                        <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>{section.subtitle}</Text>
+                        <Text style={[styles.sectionSubtitle, { color: subtitleColor }]}>{section.subtitle}</Text>
                     </View>
 
                     <ScrollView 
@@ -158,11 +182,16 @@ export default function SystemsScreen() {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.carouselContent}
                         decelerationRate="fast"
-                        snapToInterval={187} 
+                        snapToInterval={170} 
                     >
                         {section.items.map((item, index) => {
                             const IconLib = item.lib;
                             const isLocked = item.isPremium && !isPremium;
+                            const iconColor = isLocked ? (isDark ? colors.textSecondary : '#94a3b8') : item.color;
+                            
+                            const iconBg = isLocked 
+                                ? iconBgLocked 
+                                : (isDark ? item.color + '15' : item.color + '10');
 
                             return (
                                 <Animated.View 
@@ -175,58 +204,64 @@ export default function SystemsScreen() {
                                         style={{ marginRight: 12 }}
                                     >
                                         <GlassCard 
-                                            style={[
-                                                styles.card,
-                                                // ✅ ADAPTATION COULEURS :
-                                                { 
-                                                    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF',
-                                                    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                                                    shadowColor: isDark ? undefined : "#000",
-                                                    shadowOpacity: isDark ? 0 : 0.05,
-                                                    shadowRadius: 10,
-                                                    elevation: isDark ? 0 : 3
-                                                }
-                                            ]}
-                                            intensity={isLocked ? 10 : (isDark ? 25 : 0)} // Pas de flou en Light
+                                            // ✅ FIX: expand={true} pour que la carte soit pleine
+                                            expand={true}
+                                            style={{ 
+                                                width: 160, 
+                                                height: 200, 
+                                                // ❌ Pas de padding ici, GlassCard le gère en interne
+                                                // On laisse GlassCard gérer le layout
+                                                borderRadius: 24,
+                                                backgroundColor: cardBg,
+                                                borderColor: cardBorder,
+                                                shadowOpacity: 0,
+                                                elevation: 0
+                                            }}
+                                            variant="default"
                                         >
-                                            {/* Icône */}
-                                            <View style={[
-                                                styles.iconBox, 
-                                                { 
-                                                    backgroundColor: isLocked 
-                                                        ? (isDark ? 'rgba(255,255,255,0.05)' : '#F3F4F6') 
-                                                        : item.color + '15',
-                                                    borderColor: isLocked ? 'transparent' : item.color + '30',
-                                                    borderWidth: 1
-                                                }
-                                            ]}>
-                                                <IconLib 
-                                                    name={item.icon as any} 
-                                                    size={34} 
-                                                    color={isLocked ? colors.textSecondary : item.color} 
-                                                    style={isLocked ? { opacity: 0.4 } : {}}
-                                                />
-                                            </View>
-
-                                            {/* Nom Module */}
-                                            <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-                                                <Text 
-                                                    style={[
-                                                        styles.cardName, 
-                                                        { color: isLocked ? colors.textSecondary : colors.text, opacity: isLocked ? 0.7 : 1 }
-                                                    ]} 
-                                                    numberOfLines={3} 
-                                                >
-                                                    {item.name}
-                                                </Text>
+                                            {/* Conteneur Interne avec Flex pour espacer Icone et Texte */}
+                                            <View style={{ flex: 1, justifyContent: 'space-between' }}>
                                                 
-                                                {/* Badge Lock */}
-                                                {isLocked && (
-                                                    <View style={styles.lockBadge}>
-                                                        <Ionicons name="lock-closed" size={10} color={colors.textSecondary} />
-                                                        <Text style={{color: colors.textSecondary, fontSize: 9, fontWeight: 'bold'}}>VERROUILLÉ</Text>
-                                                    </View>
-                                                )}
+                                                {/* Icône */}
+                                                <View style={[
+                                                    styles.iconBox, 
+                                                    { 
+                                                        backgroundColor: iconBg,
+                                                        borderColor: isLocked ? 'transparent' : (isDark ? item.color + '30' : 'transparent'),
+                                                        borderWidth: 1
+                                                    }
+                                                ]}>
+                                                    <IconLib 
+                                                        name={item.icon as any} 
+                                                        size={30} 
+                                                        color={iconColor} 
+                                                        style={isLocked ? { opacity: 0.6 } : {}}
+                                                    />
+                                                </View>
+
+                                                {/* Info & Titre */}
+                                                <View>
+                                                    <Text 
+                                                        style={[
+                                                            styles.cardName, 
+                                                            { 
+                                                                color: isLocked ? (isDark ? colors.textSecondary : '#94a3b8') : (isDark ? colors.text : '#0f172a'), 
+                                                                opacity: isLocked ? 0.8 : 1 
+                                                            }
+                                                        ]} 
+                                                        numberOfLines={2} 
+                                                    >
+                                                        {item.name}
+                                                    </Text>
+                                                    
+                                                    {/* Badge Lock */}
+                                                    {isLocked && (
+                                                        <View style={styles.lockBadge}>
+                                                            <Ionicons name="lock-closed" size={10} color={isDark ? colors.textSecondary : '#94a3b8'} />
+                                                            <Text style={{color: isDark ? colors.textSecondary : '#94a3b8', fontSize: 9, fontWeight: 'bold'}}>VERROUILLÉ</Text>
+                                                        </View>
+                                                    )}
+                                                </View>
                                             </View>
 
                                             {item.isPremium && !isLocked && (
@@ -241,7 +276,7 @@ export default function SystemsScreen() {
                 </View>
             ))}
             
-            <View style={{ height: 120 }} />
+            <View style={{ height: 100 }} />
         </ScrollView>
     </ScreenLayout>
   );
@@ -256,50 +291,41 @@ const styles = StyleSheet.create({
       paddingTop: 20, 
       paddingBottom: 10 
   },
-  headerTitle: { fontSize: 26, fontWeight: '900', letterSpacing: 2 },
-  headerSubtitle: { fontSize: 10, marginTop: 4 },
-  badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+  headerTitle: { fontSize: 24, fontWeight: '900', letterSpacing: 1 },
+  headerSubtitle: { fontSize: 10, fontWeight: 'bold', marginTop: 4, letterSpacing: 1 },
+  badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   badgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
 
   scrollContent: { paddingBottom: 60 },
   
-  sectionContainer: { marginBottom: 40 },
+  sectionContainer: { marginBottom: 30 },
   sectionHeader: { 
       flexDirection: 'row', 
       justifyContent: 'space-between', 
       alignItems: 'center', 
       paddingHorizontal: 20, 
-      marginBottom: 20 
+      marginBottom: 15 
   },
   sectionTitle: { fontSize: 14, fontWeight: '900', letterSpacing: 1 },
   sectionSubtitle: { fontSize: 10, fontWeight: 'bold', opacity: 0.6 },
 
   carouselContent: { paddingHorizontal: 20, paddingRight: 10 },
   
-  card: { 
-      width: 175, 
-      height: 240, 
-      padding: 20, 
-      justifyContent: 'space-between', 
-      borderRadius: 26,
-      borderWidth: 1,
-      // borderColor: 'rgba(255,255,255,0.1)' // Géré dynamiquement
-  },
   iconBox: { 
-      width: 60, 
-      height: 60, 
-      borderRadius: 20, 
+      width: 54, 
+      height: 54, 
+      borderRadius: 18, 
       justifyContent: 'center', 
       alignItems: 'center' 
   },
   cardName: { 
-      fontSize: 15, 
+      fontSize: 14, 
       fontWeight: 'bold', 
       marginTop: 15, 
-      lineHeight: 22, 
-      letterSpacing: 0.5 
+      lineHeight: 18, 
+      letterSpacing: 0.3 
   },
   
-  lockBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, opacity: 0.6 },
-  premiumDot: { position: 'absolute', top: 20, right: 20, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FFD700', shadowColor: '#FFD700', shadowOpacity: 0.6, shadowRadius: 5 }
+  lockBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  premiumDot: { position: 'absolute', top: 20, right: 20, width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFD700', shadowColor: '#FFD700', shadowOpacity: 0.6, shadowRadius: 5 }
 });

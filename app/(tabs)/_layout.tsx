@@ -13,14 +13,12 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 
-// Hooks
 import { useTheme } from '../../lib/theme';
 
 const { width } = Dimensions.get('window');
 const TAB_WIDTH = width - 40; 
 const TAB_ITEM_WIDTH = TAB_WIDTH / 5; 
 
-// --- COMPOSANT ICÔNE ---
 const TabIcon = ({ name, focused, color, isCenter }: any) => {
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
@@ -56,11 +54,12 @@ const TabIcon = ({ name, focused, color, isCenter }: any) => {
   );
 };
 
-// --- TAB BAR DYNAMIQUE ---
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
-  // ✅ On récupère les couleurs et le mode (Dark/Light)
   const { colors, isDark } = useTheme();
-  
+  const currentRouteName = state.routes[state.index].name;
+
+  if (currentRouteName === 'coach') return null;
+
   const translateX = useSharedValue(0);
 
   useEffect(() => {
@@ -75,21 +74,18 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
 
   return (
     <View style={[styles.tabBarContainer, { 
-        // ✅ Ombre dynamique : noire en mode sombre, bleutée douce en mode clair
-        shadowColor: isDark ? "#000" : "#a0aec0", 
-        shadowOpacity: isDark ? 0.6 : 0.25 
+        // ✅ OMBRE PROPRE : Noire en Dark, Bleutée légère en Light
+        shadowColor: isDark ? "#000" : "#60a5fa", 
+        shadowOpacity: isDark ? 0.6 : 0.15,
+        shadowRadius: isDark ? 20 : 10,
     }]}>
       
-      {/* ✅ BLURVIEW ADAPTATIF : 'dark' ou 'light' */}
-      <BlurView intensity={isDark ? 40 : 80} tint={isDark ? "dark" : "light"} style={[styles.blurContainer, { backgroundColor: colors.nav }]}>
+      <BlurView intensity={isDark ? 40 : 90} tint={isDark ? "dark" : "light"} style={[styles.blurContainer, { backgroundColor: colors.nav }]}>
         
-        {/* Bordure subtile */}
         <View style={[styles.neonBorder, { borderColor: colors.navBorder }]} />
 
-        {/* CURSEUR LUMINEUX */}
         <Animated.View style={[styles.cursorContainer, { width: TAB_ITEM_WIDTH }, animatedCursorStyle]}>
            <LinearGradient
-             // ✅ Dégradé : Blanc/Bleu en light, Cyan/Transparent en dark
              colors={isDark ? [colors.primary + '50', 'transparent'] : [colors.primary + '20', 'transparent']} 
              style={styles.cursorGradient}
              start={{ x: 0.5, y: 0 }}
@@ -98,7 +94,6 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
            <View style={[styles.cursorLight, { backgroundColor: colors.primary }]} />
         </Animated.View>
 
-        {/* ONGLETS */}
         <View style={styles.tabsRow}>
           {state.routes.map((route: any, index: number) => {
             const { options } = descriptors[route.key];
@@ -120,9 +115,6 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
             if (route.name === 'nutrition') iconName = 'food-apple-outline';
             if (route.name === 'systems') iconName = 'cpu-64-bit';
 
-            // ✅ COULEURS ADAPTÉES
-            // En mode clair : Actif = Bleu Tech, Inactif = Gris moyen
-            // En mode sombre : Actif = Blanc, Inactif = Gris clair
             const activeColor = isFocused 
                 ? (isDark ? '#fff' : colors.primary) 
                 : (isCenter ? colors.primary : colors.textSecondary);
@@ -171,63 +163,16 @@ const styles = StyleSheet.create({
     height: 70,
     borderRadius: 35,
     overflow: 'hidden',
-    // Les ombres sont gérées dynamiquement dans le composant
     shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 20,
     elevation: 10,
   },
-  blurContainer: {
-    flex: 1,
-    // Background géré dynamiquement
-  },
-  neonBorder: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 35,
-    borderWidth: 1,
-  },
-  cursorContainer: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-  },
-  cursorGradient: {
-    width: '50%',
-    height: '70%',
-    opacity: 0.5,
-  },
-  cursorLight: {
-    position: 'absolute',
-    top: 0,
-    width: 20,
-    height: 2,
-    borderRadius: 2,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-  },
-  tabsRow: {
-    flexDirection: 'row',
-    height: '100%',
-  },
-  tabItem: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: 50,
-    width: 50,
-  },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 6,
-    position: 'absolute',
-    bottom: 10,
-  }
+  blurContainer: { flex: 1 },
+  neonBorder: { ...StyleSheet.absoluteFillObject, borderRadius: 35, borderWidth: 1 },
+  cursorContainer: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'flex-start', alignItems: 'center' },
+  cursorGradient: { width: '50%', height: '70%', opacity: 0.5 },
+  cursorLight: { position: 'absolute', top: 0, width: 20, height: 2, borderRadius: 2, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 10 },
+  tabsRow: { flexDirection: 'row', height: '100%' },
+  tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  iconContainer: { justifyContent: 'center', alignItems: 'center', height: 50, width: 50 },
+  activeDot: { width: 4, height: 4, borderRadius: 2, marginTop: 6, position: 'absolute', bottom: 10 }
 });

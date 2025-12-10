@@ -1,92 +1,163 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { useTheme } from '../../lib/theme';
-import { useTranslation } from 'react-i18next'; // Import
+import Animated, { FadeInDown, FadeInUp, useSharedValue, withSpring } from 'react-native-reanimated';
 
-const { width } = Dimensions.get('window');
-const CIRCLE_SIZE = width * 0.6;
+import { ScreenLayout } from '../../components/ui/ScreenLayout';
+import { useTheme } from '../../lib/theme';
+import { useNutritionLog } from '../../hooks/useNutritionLog';
+import { useNutritionMutations } from '../../hooks/useNutritionMutations';
+
+// --- CONFIGURATION ---
+const DAILY_GOAL = 2500; // Objectif 2.5L
+const CUP_SIZES = [150, 250, 500];
 
 export default function WaterScreen() {
-    const router = useRouter();
-    const theme = useTheme();
-    const { t } = useTranslation(); // Hook
-    const [intake, setIntake] = useState(0);
-    const GOAL = 2500;
+  const router = useRouter();
+  const { colors, isDark } = useTheme();
+  const today = new Date().toISOString().split('T')[0];
 
-    const addWater = () => {
-        if (Platform.OS !== 'web') Haptics.selectionAsync();
-        setIntake(prev => Math.min(prev + 250, GOAL + 500));
-    };
+  const { data: log, isLoading } = useNutritionLog(today);
+  const { addWater } = useNutritionMutations(today);
 
-    const percentage = Math.min(intake / GOAL, 1);
+  const currentAmount = log?.water_ml || 0;
+  const progress = Math.min(currentAmount / DAILY_GOAL, 1);
+  const percentage = Math.round(progress * 100);
 
-    const styles = StyleSheet.create({
-        container: { flex: 1, backgroundColor: theme.colors.bg },
-        safeArea: { flex: 1 },
-        header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
-        backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
-        headerTitle: { color: theme.colors.text, fontWeight: '900', letterSpacing: 1, fontSize: 16 },
+  const waveHeight = useSharedValue(0);
+  useEffect(() => {
+    waveHeight.value = withSpring(progress * 100, { damping: 15 });
+  }, [progress]);
+
+  const handleAdd = (amount: number) => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // ✅ CORRECTION ICI : Ajout de "|| null"
+    addWater.mutate({ amount, currentLog: log || null });
+  };
+
+  // COULEURS LIGHT MODE
+  const gaugeBorder = isDark ? '#06b6d430' : '#cffafe';
+  const gaugeBg = isDark ? '#000' : '#fff';
+  const waterColor = '#06b6d4';
+  const btnBg = isDark ? '#1e293b' : '#fff';
+  const btnBorder = isDark ? '#334155' : '#e2e8f0';
+
+  return (
+    <ScreenLayout>
+        <Image 
+            source={require('../../assets/adaptive-icon.png')} 
+            style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02 }]}
+            blurRadius={50}
+        />
         
-        content: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-        
-        circleContainer: { width: CIRCLE_SIZE, height: CIRCLE_SIZE, borderRadius: CIRCLE_SIZE/2, borderWidth: 4, borderColor: theme.colors.glass, justifyContent: 'center', alignItems: 'center', marginBottom: 50, overflow: 'hidden' },
-        waterFill: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#3b82f6', opacity: 0.3 },
-        
-        value: { fontSize: 48, fontWeight: '900', color: '#3b82f6' },
-        unit: { fontSize: 16, color: theme.colors.textSecondary, fontWeight: 'bold' },
-        label: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 5, letterSpacing: 2 },
-
-        addBtn: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#3b82f6', justifyContent: 'center', alignItems: 'center', shadowColor: '#3b82f6', shadowOpacity: 0.5, shadowRadius: 20, elevation: 10 },
-        addText: { color: '#fff', fontWeight: 'bold', fontSize: 10, marginTop: 5 },
-
-        statsRow: { flexDirection: 'row', width: '100%', paddingHorizontal: 40, justifyContent: 'space-between', marginBottom: 40 },
-        statItem: { alignItems: 'center' },
-        statVal: { color: theme.colors.text, fontWeight: 'bold', fontSize: 20 },
-        statLab: { color: theme.colors.textSecondary, fontSize: 10, letterSpacing: 1, marginTop: 5 },
-    });
-
-    return (
-        <View style={styles.container}>
-            <StatusBar style={theme.isDark ? "light" : "dark"} />
-            <SafeAreaView style={styles.safeArea}>
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <MaterialCommunityIcons name="arrow-left" size={24} color={theme.colors.text} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>{t('modules.water.title')}</Text>
-                    <View style={{ width: 40 }} />
-                </View>
-
-                <View style={styles.content}>
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statVal}>{GOAL/1000}{t('modules.water.unit')}</Text>
-                            <Text style={styles.statLab}>{t('modules.water.goal')}</Text>
-                        </View>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statVal}>{Math.round((intake/GOAL)*100)}%</Text>
-                            <Text style={styles.statLab}>{t('modules.water.current')}</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.circleContainer}>
-                        <View style={[styles.waterFill, { height: `${percentage * 100}%` }]} />
-                        <Text style={styles.value}>{intake}</Text>
-                        <Text style={styles.unit}>ML</Text>
-                    </View>
-
-                    <TouchableOpacity style={styles.addBtn} onPress={addWater}>
-                        <MaterialCommunityIcons name="plus" size={32} color="#fff" />
-                        <Text style={styles.addText}>+250ml</Text>
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
+        <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: isDark ? '#ffffff10' : '#00000005', borderColor: isDark ? 'transparent' : '#e5e7eb', borderWidth: 1 }]}>
+                <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>HYDRATATION</Text>
+            <View style={{ width: 40 }} />
         </View>
-    );
+
+        <ScrollView contentContainerStyle={{ paddingBottom: 50, flexGrow: 1, justifyContent: 'center' }}>
+            
+            <Animated.View entering={FadeInUp.springify()} style={{ alignItems: 'center', marginBottom: 40 }}>
+                <View style={[styles.gaugeContainer, { borderColor: gaugeBorder, backgroundColor: gaugeBg }]}>
+                    <View style={[styles.waterFill, { height: `${percentage}%`, backgroundColor: waterColor }]}>
+                         <LinearGradient colors={['rgba(255,255,255,0.3)', 'transparent']} style={{height: 20}} />
+                    </View>
+                    
+                    <View style={styles.gaugeInfo}>
+                        <Text style={[styles.percentage, { color: percentage > 50 ? '#fff' : colors.text }]}>
+                            {percentage}%
+                        </Text>
+                        <Text style={[styles.mlText, { color: percentage > 50 ? 'rgba(255,255,255,0.9)' : colors.textSecondary }]}>
+                            {currentAmount} / {DAILY_GOAL} ml
+                        </Text>
+                    </View>
+                </View>
+            </Animated.View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 20 }}>
+                {CUP_SIZES.map((size, index) => (
+                    <Animated.View key={size} entering={FadeInDown.delay(index * 100).springify()}>
+                        <TouchableOpacity 
+                            onPress={() => handleAdd(size)}
+                            style={[
+                                styles.addButton, 
+                                { 
+                                    backgroundColor: btnBg,
+                                    borderColor: btnBorder,
+                                    shadowColor: waterColor,
+                                    shadowOpacity: isDark ? 0 : 0.1
+                                }
+                            ]}
+                        >
+                            <Ionicons name="water" size={24} color={waterColor} />
+                            <Text style={[styles.addText, { color: colors.text }]}>+{size}ml</Text>
+                        </TouchableOpacity>
+                    </Animated.View>
+                ))}
+            </View>
+
+        </ScrollView>
+    </ScreenLayout>
+  );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    marginBottom: 20,
+  },
+  headerTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 1 },
+  backBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  gaugeContainer: {
+    width: 220,
+    height: 350,
+    borderRadius: 110,
+    borderWidth: 8,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    position: 'relative',
+    shadowColor: "#06b6d4",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  waterFill: {
+    width: '100%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  gaugeInfo: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  percentage: { fontSize: 48, fontWeight: '900' },
+  mlText: { fontSize: 14, fontWeight: '600', marginTop: 5 },
+  addButton: {
+    width: 80,
+    height: 100,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    gap: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  addText: { fontSize: 12, fontWeight: 'bold' }
+});
