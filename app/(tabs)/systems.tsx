@@ -8,7 +8,6 @@ import {
   Alert, 
   Platform,
   Dimensions,
-
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
@@ -46,7 +45,7 @@ export default function SystemsScreen() {
         { name: "Force Max (1RM)", route: '/features/calculator1rm', icon: 'arm-flex', lib: MaterialCommunityIcons, color: '#ec4899', isPremium: false },
         { name: "Chrono / Timer", route: '/features/timer', icon: 'timer-outline', lib: Ionicons, color: '#f59e0b', isPremium: false },
         { name: "Stretching", route: '/features/stretching', icon: 'yoga', lib: MaterialCommunityIcons, color: '#a78bfa', isPremium: false },
-        { name: "Posture IA", route: '/features/posture', icon: 'human-male-board', lib: MaterialCommunityIcons, color: '#f43f5e', isPremium: true },
+        { name: "Posture IA", route: '/features/posture', icon: 'human-male-board', lib: MaterialCommunityIcons, color: '#f43f5e', isPremium: true, isDev: true }, // 🔒 DEV
         { name: "Réflexes", route: '/features/reflex', icon: 'lightning-bolt', lib: MaterialCommunityIcons, color: '#eab308', isPremium: true },
         { name: "Mensurations", route: '/features/body', icon: 'tape-measure', lib: MaterialCommunityIcons, color: colors.textSecondary, isPremium: false },
         { name: "Masse Grasse", route: '/features/body_fat', icon: 'percent', lib: MaterialCommunityIcons, color: colors.textSecondary, isPremium: false },
@@ -79,8 +78,8 @@ export default function SystemsScreen() {
         { name: "Sommeil", route: '/features/sleep', icon: 'bed-outline', lib: Ionicons, color: '#8b5cf6', isPremium: true },
         { name: "Thérapie Froid", route: '/features/cold', icon: 'snowflake', lib: MaterialCommunityIcons, color: '#3b82f6', isPremium: true },
         { name: "Gestion Stress", route: '/features/stress', icon: 'leaf', lib: MaterialCommunityIcons, color: '#f43f5e', isPremium: true },
-        { name: "Santé Cœur", route: '/features/heart', icon: 'heart-pulse', lib: MaterialCommunityIcons, color: '#ef4444', isPremium: true },
-        { name: "VFC / HRV", route: '/features/hrv', icon: 'waveform', lib: MaterialCommunityIcons, color: '#10b981', isPremium: true },
+        { name: "Santé Cœur", route: '/features/heart', icon: 'heart-pulse', lib: MaterialCommunityIcons, color: '#ef4444', isPremium: true, isDev: true }, // 🔒 DEV
+        { name: "VFC / HRV", route: '/features/hrv', icon: 'waveform', lib: MaterialCommunityIcons, color: '#10b981', isPremium: true, isDev: true }, // 🔒 DEV
         { name: "Humeur", route: '/features/mood', icon: 'emoticon-happy-outline', lib: MaterialCommunityIcons, color: '#f59e0b', isPremium: false },
         { name: "Vide-Tête", route: '/features/discharge', icon: 'brain', lib: MaterialCommunityIcons, color: '#6366f1', isPremium: true },
       ]
@@ -91,7 +90,7 @@ export default function SystemsScreen() {
       subtitle: "Cognitif & Environnement",
       items: [
         { name: "Nootropiques", route: '/features/nootropics', icon: 'flask-outline', lib: Ionicons, color: '#8b5cf6', isPremium: true },
-        { name: "Scanner Vision", route: '/features/vision', icon: 'camera-metering-center', lib: MaterialCommunityIcons, color: colors.primary, isPremium: true },
+        { name: "Scanner Vision", route: '/features/vision', icon: 'camera-metering-center', lib: MaterialCommunityIcons, color: colors.primary, isPremium: true, isDev: true }, // 🔒 DEV
         { name: "Environnement", route: '/features/env', icon: 'weather-sunny', lib: MaterialCommunityIcons, color: '#f97316', isPremium: true },
         { name: "Journal Perso", route: '/features/journaling', icon: 'book-open-page-variant', lib: MaterialCommunityIcons, color: colors.textSecondary, isPremium: false },
       ]
@@ -99,6 +98,17 @@ export default function SystemsScreen() {
   ];
 
   const handleNavigation = (item: any) => {
+    // 🚧 BLOCAGE DEV
+    if (item.isDev) {
+        if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+            "ZONE EN CONSTRUCTION 🏗️",
+            `Le module ${item.name} nécessite l'accès aux capteurs biométriques et est en cours de finalisation par l'équipe d'ingénierie.`,
+            [{ text: "Compris", style: "default" }]
+        );
+        return;
+    }
+
     if (item.isPremium && !isPremium) {
         if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert(
@@ -126,7 +136,7 @@ export default function SystemsScreen() {
 
   return (
     <ScreenLayout>
-        {/* FOND (Même que Workout/Dashboard) */}
+        {/* FOND */}
         <Image 
             source={require('../../assets/adaptive-icon.png')} 
             style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02, transform: [{scale: 1.5}] }]}
@@ -179,17 +189,20 @@ export default function SystemsScreen() {
 
                     <ScrollView 
                         horizontal 
-                        showsHorizontalScrollIndicator={false}
+                        showsHorizontalScrollIndicator={false} 
                         contentContainerStyle={styles.carouselContent}
                         decelerationRate="fast"
                         snapToInterval={170} 
                     >
-                        {section.items.map((item, index) => {
+                        {section.items.map((item: any, index) => {
                             const IconLib = item.lib;
-                            const isLocked = item.isPremium && !isPremium;
-                            const iconColor = isLocked ? (isDark ? colors.textSecondary : '#94a3b8') : item.color;
+                            const isLocked = item.isPremium && !isPremium && !item.isDev;
+                            const isDev = item.isDev;
+
+                            // Couleur icône : Grisée si Dev ou Locked
+                            const iconColor = (isLocked || isDev) ? (isDark ? colors.textSecondary : '#94a3b8') : item.color;
                             
-                            const iconBg = isLocked 
+                            const iconBg = (isLocked || isDev)
                                 ? iconBgLocked 
                                 : (isDark ? item.color + '15' : item.color + '10');
 
@@ -204,22 +217,20 @@ export default function SystemsScreen() {
                                         style={{ marginRight: 12 }}
                                     >
                                         <GlassCard 
-                                            // ✅ FIX: expand={true} pour que la carte soit pleine
                                             expand={true}
                                             style={{ 
                                                 width: 160, 
                                                 height: 200, 
-                                                // ❌ Pas de padding ici, GlassCard le gère en interne
-                                                // On laisse GlassCard gérer le layout
                                                 borderRadius: 24,
                                                 backgroundColor: cardBg,
                                                 borderColor: cardBorder,
                                                 shadowOpacity: 0,
-                                                elevation: 0
+                                                elevation: 0,
+                                                // Opacité réduite si DEV
+                                                opacity: isDev ? 0.8 : 1
                                             }}
                                             variant="default"
                                         >
-                                            {/* Conteneur Interne avec Flex pour espacer Icone et Texte */}
                                             <View style={{ flex: 1, justifyContent: 'space-between' }}>
                                                 
                                                 {/* Icône */}
@@ -227,7 +238,7 @@ export default function SystemsScreen() {
                                                     styles.iconBox, 
                                                     { 
                                                         backgroundColor: iconBg,
-                                                        borderColor: isLocked ? 'transparent' : (isDark ? item.color + '30' : 'transparent'),
+                                                        borderColor: (isLocked || isDev) ? 'transparent' : (isDark ? item.color + '30' : 'transparent'),
                                                         borderWidth: 1
                                                     }
                                                 ]}>
@@ -235,7 +246,7 @@ export default function SystemsScreen() {
                                                         name={item.icon as any} 
                                                         size={30} 
                                                         color={iconColor} 
-                                                        style={isLocked ? { opacity: 0.6 } : {}}
+                                                        style={(isLocked || isDev) ? { opacity: 0.6 } : {}}
                                                     />
                                                 </View>
 
@@ -245,8 +256,8 @@ export default function SystemsScreen() {
                                                         style={[
                                                             styles.cardName, 
                                                             { 
-                                                                color: isLocked ? (isDark ? colors.textSecondary : '#94a3b8') : (isDark ? colors.text : '#0f172a'), 
-                                                                opacity: isLocked ? 0.8 : 1 
+                                                                color: (isLocked || isDev) ? (isDark ? colors.textSecondary : '#94a3b8') : (isDark ? colors.text : '#0f172a'), 
+                                                                opacity: (isLocked || isDev) ? 0.8 : 1 
                                                             }
                                                         ]} 
                                                         numberOfLines={2} 
@@ -254,8 +265,13 @@ export default function SystemsScreen() {
                                                         {item.name}
                                                     </Text>
                                                     
-                                                    {/* Badge Lock */}
-                                                    {isLocked && (
+                                                    {/* Badges de Statut */}
+                                                    {isDev ? (
+                                                        <View style={[styles.statusBadge, { borderColor: '#f59e0b', backgroundColor: isDark ? '#f59e0b20' : '#fffbeb' }]}>
+                                                            <Ionicons name="construct" size={10} color="#f59e0b" />
+                                                            <Text style={{color: '#f59e0b', fontSize: 9, fontWeight: 'bold'}}>EN DÉV</Text>
+                                                        </View>
+                                                    ) : isLocked && (
                                                         <View style={styles.lockBadge}>
                                                             <Ionicons name="lock-closed" size={10} color={isDark ? colors.textSecondary : '#94a3b8'} />
                                                             <Text style={{color: isDark ? colors.textSecondary : '#94a3b8', fontSize: 9, fontWeight: 'bold'}}>VERROUILLÉ</Text>
@@ -264,7 +280,7 @@ export default function SystemsScreen() {
                                                 </View>
                                             </View>
 
-                                            {item.isPremium && !isLocked && (
+                                            {item.isPremium && !isLocked && !isDev && (
                                                 <View style={styles.premiumDot} />
                                             )}
                                         </GlassCard>
@@ -304,7 +320,7 @@ const styles = StyleSheet.create({
       justifyContent: 'space-between', 
       alignItems: 'center', 
       paddingHorizontal: 20, 
-      marginBottom: 15 
+      paddingBottom: 15 
   },
   sectionTitle: { fontSize: 14, fontWeight: '900', letterSpacing: 1 },
   sectionSubtitle: { fontSize: 10, fontWeight: 'bold', opacity: 0.6 },
@@ -327,5 +343,9 @@ const styles = StyleSheet.create({
   },
   
   lockBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  statusBadge: { 
+      flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, 
+      alignSelf: 'flex-start', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1 
+  },
   premiumDot: { position: 'absolute', top: 20, right: 20, width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFD700', shadowColor: '#FFD700', shadowOpacity: 0.6, shadowRadius: 5 }
 });

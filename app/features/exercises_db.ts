@@ -245,3 +245,5 @@ export const EXERCISES_DB = [
   { id: 'cardio_24', name: 'Shadow Boxing', muscle: 'Cardio', equipment: 'Poids du corps', difficulty: 'Intermédiaire', instructions: "Boxe dans le vide." },
   { id: 'cardio_25', name: 'Turkish Get Up', muscle: 'Cardio', equipment: 'Kettlebell', difficulty: 'Avancé', instructions: "Se relever du sol avec un poids au dessus de la tête." },
 ];
+
+export default EXERCISES_DB;

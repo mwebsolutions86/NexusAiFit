@@ -19,9 +19,35 @@ async function callNeuralCore(payload: AIRequestPayload) {
       body: payload
     });
 
+    // 🛠 GESTION AMÉLIORÉE DES ERREURS
+    // Intercepte les erreurs HTTP (4xx, 5xx) renvoyées par invoke
     if (error) {
+        let customMessage = "Erreur technique IA";
+        
+        // On tente de récupérer le vrai message d'erreur si disponible
+        try {
+            if (error instanceof Error) {
+                // Parfois le message d'erreur contient le JSON de la réponse
+                try {
+                    // Si le message est du JSON stringifié (cas fréquent)
+                    const parsedMsg = JSON.parse(error.message);
+                    if (parsedMsg.error) customMessage = parsedMsg.error;
+                } catch {
+                    // Sinon on prend le message brut
+                    customMessage = error.message;
+                }
+            }
+        } catch (e) {
+            // Fallback silencieux
+        }
+
         console.error(`[NEURAL CORE] Error on ${payload.type}:`, error);
-        throw error;
+        throw new Error(customMessage);
+    }
+    
+    // Gestion des erreurs métier (Status 200 mais avec champ error dans le JSON)
+    if (data && data.error) {
+        throw new Error(data.error);
     }
     
     // Si l'IA renvoie une string (cas rare d'erreur mal formatée), on tente de parser
@@ -33,7 +59,7 @@ async function callNeuralCore(payload: AIRequestPayload) {
 
   } catch (e: any) {
     console.error("[NEURAL CORE] System Failure:", e.message);
-    // On propage l'erreur pour que l'UI affiche une alerte
+    // On propage l'erreur pour que l'UI affiche une alerte propre
     throw new Error(e.message || "Erreur de communication avec le noyau IA.");
   }
 }
