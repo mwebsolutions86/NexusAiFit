@@ -75,16 +75,19 @@ serve(async (req) => {
 
       case 'MEAL': {
         maxTokens = 4000;
+        
+        // 1. RÉCUPÉRATION DES DONNÉES (C'est ce qui manquait !)
         const weight = Number(userProfile.weight) || 75;
         const height = Number(userProfile.height) || 175;
         const age = Number(userProfile.age) || 25;
         const gender = (userProfile.gender || 'male').toLowerCase();
-        // On récupère 'goal' ici aussi sans conflit
         const goal = (userProfile.goal || 'maintenance').toLowerCase();
 
-        // LOGIQUE NUTRITION (Mifflin-St Jeor)
+        // 2. CALCUL DU BMR (Mifflin-St Jeor)
         let bmr = 10 * weight + 6.25 * height - 5 * age + ((gender === 'female') ? -161 : 5);
-        const tdee = Math.round(bmr * 1.375); // Activité modérée par défaut
+        
+        // 3. CALCUL TOTAL (TDEE)
+        const tdee = Math.round(bmr * 1.375); // Activité sédentaire/modérée par défaut
         
         let targetCals = tdee;
         if (goal.includes('gain') || goal.includes('masse')) targetCals += 400;
@@ -92,16 +95,41 @@ serve(async (req) => {
 
         console.log(`🍎 [CALCULATOR] Cible: ${targetCals} kcal`);
 
-        systemPrompt += ` Plan nutrition de ${targetCals} kcal (±50).
-        FORMAT JSON STRICT : { "title": "Plan ${targetCals}kcal", "days": [{ "day": "Lundi", "meals": [{ "name": "...", "items": [{ "name": "...", "calories": 500, "protein": 30, "notes": "..." }] }] }] }
-        IMPORTANT: 'calories' et 'protein' doivent être des NOMBRES.`;
+        // 4. PROMPT MASTERCHEF
+        systemPrompt += ` Génère un plan nutritionnel complet pour 7 JOURS (Lundi au Dimanche).
+        Cible quotidienne : ${targetCals} kcal (±50).
+        
+        POUR CHAQUE ALIMENT, TU DOIS FOURNIR :
+        1. "ingredients": Une liste précise pour la liste de courses. Format: "Quantité Unité Ingrédient" (ex: "100 g Riz", "2 unité Oeufs").
+        2. "preparation": Une instruction courte pour cuisiner.
+
+        FORMAT JSON STRICT : { 
+          "title": "Plan ${targetCals}kcal", 
+          "days": [
+            { 
+              "day": "Lundi", 
+              "meals": [{ 
+                "name": "Petit Déj", 
+                "items": [{ 
+                    "name": "Omelette Fromage", 
+                    "calories": 300, 
+                    "protein": 20, 
+                    "ingredients": ["2 unité Oeufs", "30 g Fromage râpé"],
+                    "preparation": "Battre les œufs, cuire à la poêle, ajouter le fromage."
+                }] 
+              }] 
+            },
+            ... (jusqu'à Dimanche)
+          ] 
+        }`;
+        
         userContent = `Préférences: ${preferences || 'Aucune'}.`;
         break;
       }
 
       case 'CHAT': {
         temperature = 0.7;
-        systemPrompt += ` Réponds uniquement en JSON : { "response": "Ta réponse ici" }.`;
+        systemPrompt += ` Réponds uniquement en JSON : { Ta réponse ici }.`;
         break;
       }
 

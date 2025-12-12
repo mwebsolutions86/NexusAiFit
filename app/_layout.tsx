@@ -1,22 +1,20 @@
+// app/_layout.tsx
 import '../lib/i18n'; 
 import React, { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
-import { ThemeProvider, useTheme } from '../lib/theme'; // Assure-toi d'exporter useTheme
+import { ThemeProvider, useTheme } from '../lib/theme'; 
+import { AlertProvider } from '../lib/AlertContext'; // ✅ IMPORT
 import * as Linking from 'expo-linking';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../lib/react-query';
 
-// ⚡ Composant intermédiaire pour gérer la StatusBar dynamique
 const AppContent = () => {
-  const { isDark } = useTheme(); // Maintenant on a accès au contexte
-  
+  const { isDark } = useTheme(); 
   return (
     <View style={{ flex: 1, backgroundColor: isDark ? '#000' : '#F2F2F7' }}>
-      {/* StatusBar adaptative */}
       <StatusBar style={isDark ? "light" : "dark"} />
-      
       <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
         <Stack.Screen name="index" /> 
         <Stack.Screen name="auth/index" options={{ presentation: 'modal' }} />
@@ -33,12 +31,7 @@ export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const handleDeepLink = async (url: string) => {
-      if (url && (url.includes('access_token') || url.includes('refresh_token'))) {
-        // Deep linking logic
-      }
-    };
-    Linking.getInitialURL().then((url) => { if (url) handleDeepLink(url); });
+    // ... (Ton code deep link existant)
     setIsReady(true);
   }, []);
 
@@ -53,7 +46,10 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AppContent />
+        {/* ✅ ENVELOPPE AVEC ALERT PROVIDER */}
+        <AlertProvider>
+            <AppContent />
+        </AlertProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, StyleSheet, TouchableOpacity, ActivityIndicator, StyleProp, ViewStyle } from 'react-native';
+import { Text, StyleSheet, TouchableOpacity, ActivityIndicator, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../lib/theme';
@@ -10,7 +10,8 @@ interface NeonButtonProps {
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
   loading?: boolean;
   disabled?: boolean;
-  style?: StyleProp<ViewStyle>; // CORRECTION ICI
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
   variant?: 'primary' | 'danger';
 }
 
@@ -21,14 +22,16 @@ export const NeonButton = ({
   loading = false, 
   disabled = false,
   style,
+  textStyle,
   variant = 'primary'
 }: NeonButtonProps) => {
   const { colors } = useTheme();
 
-  // CORRECTION: On force le type pour rassurer TypeScript que c'est bien un tuple valide pour le dégradé
+  // ✅ CORRECTION : On remplace 'colors.secondary' (qui n'existe pas) par une valeur hexadécimale.
+  // Le type [string, string, ...string[]] rassure TypeScript sur le fait qu'il y a au moins 2 couleurs.
   const gradientColors: [string, string, ...string[]] = variant === 'danger' 
     ? [colors.danger, '#991b1b'] 
-    : [colors.primary, colors.secondary];
+    : [colors.primary, '#4f46e5']; // Violet foncé pour remplacer secondary
 
   return (
     <TouchableOpacity 
@@ -55,7 +58,7 @@ export const NeonButton = ({
                 style={{ marginRight: 8 }} 
               />
             )}
-            <Text style={styles.text}>{label.toUpperCase()}</Text>
+            <Text style={[styles.text, textStyle]}>{label.toUpperCase()}</Text>
           </>
         )}
       </LinearGradient>
@@ -70,7 +73,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   gradient: {
-    paddingVertical: 16,
+    paddingVertical: 12, // Ajusté pour éviter que le texte ne soit coupé
     paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
@@ -81,5 +84,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '900',
     letterSpacing: 1,
+    lineHeight: 20, // Ajouté pour centrer verticalement le texte
   },
 });

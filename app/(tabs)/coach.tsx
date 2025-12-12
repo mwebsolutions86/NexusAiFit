@@ -32,7 +32,7 @@ import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router'; // ✅ Import Router
+import { useRouter } from 'expo-router';
 
 import { useTheme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
@@ -122,7 +122,7 @@ const MessageBubble = ({ item }: { item: Message }) => {
 export default function CoachScreen() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const router = useRouter(); // ✅ Router
+  const router = useRouter(); 
   
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -207,6 +207,7 @@ export default function CoachScreen() {
       ]);
   };
 
+  // --- COEUR DE LA CORRECTION : Envoi et Nettoyage ---
   const sendMessage = async (textToUse?: string) => {
     const text = textToUse || input;
     if (!text.trim() || loading || !currentSessionId) return;
@@ -220,11 +221,13 @@ export default function CoachScreen() {
     const { data: { session: authSession } } = await supabase.auth.getSession();
     if (!authSession) return;
 
+    // 1. Ajouter le message utilisateur
     const newMsg: Message = { id: Date.now().toString(), text: userText, isUser: true, timestamp: new Date() };
     const newHistory = [...messages, newMsg];
     setMessages(newHistory);
     setLoading(true);
     
+    // Mise à jour du titre si c'est le début
     if (messages.length <= 1) {
         const newTitle = userText.length > 25 ? userText.substring(0, 25) + '...' : userText;
         await supabase.from('chat_sessions').update({ title: newTitle }).eq('id', currentSessionId);
@@ -234,17 +237,57 @@ export default function CoachScreen() {
     try {
       await supabase.from('chat_history').insert({ user_id: authSession.user.id, session_id: currentSessionId, role: 'user', content: userText });
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', authSession.user.id).single();
+      
       const contextMessages = newHistory.slice(-6).map(m => ({ role: m.isUser ? "user" : "assistant", content: m.text }));
-      const { data, error } = await supabase.functions.invoke('supafit-ai', { body: { type: 'CHAT', messages: contextMessages, userProfile: profile || {} } });
+      
+      // Appel API
+      const { data, error } = await supabase.functions.invoke('supafit-ai', { 
+          body: { type: 'CHAT', messages: contextMessages, userProfile: profile || {} } 
+      });
+      
       if (error) throw error;
 
-      let aiText = typeof data === 'string' ? JSON.parse(data).response : data.response;
+      // --- 🛡️ ZONE DE NETTOYAGE JSON ROBUSTE ---
+      let aiText = "Je n'ai pas compris.";
+
+      // A. Normalisation : data peut être une string ou un objet
+      let rawData = data;
+      if (typeof data === 'string') {
+          try { rawData = JSON.parse(data); } catch { rawData = { response: data }; }
+      }
+
+      // B. Récupération prioritaire du champ 'response' (standard) ou 'reponse' (hallucination FR)
+      if (rawData?.response) aiText = rawData.response;
+      else if (rawData?.reponse) aiText = rawData.reponse;
+      else if (rawData?.message) aiText = rawData.message;
+      else if (typeof rawData === 'string') aiText = rawData; // Fallback ultime
+
+      // C. DOUBLE PARSING (Le Fix Magique) : 
+      // Si aiText est une string qui ressemble à du JSON (ex: '{"reponse":"Bonjour"}'), on la re-parse.
+      if (typeof aiText === 'string') {
+          const trimmed = aiText.trim();
+          if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+              try {
+                  const nested = JSON.parse(trimmed);
+                  if (nested.response) aiText = nested.response;
+                  else if (nested.reponse) aiText = nested.reponse;
+                  else if (nested.message) aiText = nested.message;
+              } catch (e) {
+                  // Ce n'était pas du JSON valide, on garde le texte tel quel (ex: "Attention {sujet}...")
+              }
+          }
+      }
+      // ------------------------------------------
+
       const aiMsg: Message = { id: (Date.now()+1).toString(), text: aiText, isUser: false, timestamp: new Date() };
       setMessages(prev => [...prev, aiMsg]);
+      
       await supabase.from('chat_history').insert({ user_id: authSession.user.id, session_id: currentSessionId, role: 'assistant', content: aiText });
       await supabase.from('chat_sessions').update({ updated_at: new Date() }).eq('id', currentSessionId);
+
     } catch (e) {
-      setMessages(prev => [...prev, { id: Date.now().toString(), text: "Erreur de liaison.", isUser: false, timestamp: new Date() }]);
+      console.error("Erreur Chat:", e);
+      setMessages(prev => [...prev, { id: Date.now().toString(), text: "Connexion neuronale interrompue.", isUser: false, timestamp: new Date() }]);
     } finally {
       setLoading(false);
     }
@@ -285,7 +328,6 @@ export default function CoachScreen() {
       />
 
       <View style={[styles.header, { borderBottomColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}>
-          {/* ✅ BOUTON RETOUR VERS DASHBOARD */}
           <TouchableOpacity 
             onPress={() => router.navigate('/dashboard')} 
             style={styles.menuBtn}
@@ -304,7 +346,6 @@ export default function CoachScreen() {
               </View>
           </View>
 
-          {/* ✅ BOUTON MENU ARCHIVES (Déplacé à droite) */}
           <TouchableOpacity onPress={openSidebar} style={styles.menuBtn}>
               <MaterialCommunityIcons name="history" size={28} color={colors.primary} />
           </TouchableOpacity>
@@ -313,7 +354,6 @@ export default function CoachScreen() {
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
         style={{ flex: 1 }}
-        // Moins d'offset nécessaire car plus de TabBar
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
       >
         <FlatList
@@ -335,7 +375,6 @@ export default function CoachScreen() {
 
         <View style={[
             styles.inputWrapper, 
-            // ✅ AJUSTEMENT : On colle plus près du bas maintenant qu'il n'y a plus de TabBar
             { paddingBottom: Math.max(insets.bottom, 20) + 10 } 
         ]}>
             <GlassCard 

@@ -19,8 +19,15 @@ export const useNutritionLog = (dateStr: string) => {
 
       if (error) throw error;
       
-      // On retourne un objet par défaut si rien n'existe encore pour ce jour
-      return (data as NutritionLogDB) || { 
+      // ✅ CORRECTION BLINDÉE
+      if (data) {
+          // Si meals_status est un objet '{}' (défaut SQL) ou null, on force un tableau []
+          const safeMealsStatus = Array.isArray(data.meals_status) ? data.meals_status : [];
+          return { ...data, meals_status: safeMealsStatus };
+      }
+
+      // Cas où aucune ligne n'existe encore
+      return { 
           meals_status: [], 
           total_calories: 0, 
           total_protein: 0 

@@ -8,7 +8,7 @@ import {
   TouchableOpacity, 
   Alert, 
   Platform, 
-  Dimensions 
+  KeyboardAvoidingView
 } from 'react-native';
 import { Image } from 'expo-image'; 
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -38,13 +38,18 @@ import { GlassCard } from '../../components/ui/GlassCard';
 import { NeonButton } from '../../components/ui/NeonButton';
 import { GlassButton } from '../../components/ui/GlassButton';
 
-const { width } = Dimensions.get('window');
-
-// --- 🛠 UTILITAIRE DATE (Correction) ---
+// --- 🛠 UTILITAIRE DATE ---
 const getTodayIndex = () => {
   const day = new Date().getDay(); 
-  // Transforme 0 (Dimanche) -> 6, 1 (Lundi) -> 0
   return (day + 6) % 7; 
+};
+
+// --- TYPES DE DONNÉES ---
+// On structure la donnée saisie par l'utilisateur
+type ExerciseInput = {
+    done: boolean;
+    weight: string;
+    reps: string;
 };
 
 // --- 👻 SKELETON ---
@@ -61,7 +66,6 @@ const SkeletonItem = ({ style, width, height, borderRadius = 8 }: any) => {
 
 const WorkoutSkeleton = () => (
     <View style={{ padding: 20, gap: 20 }}>
-        {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
             <View style={{ gap: 8 }}>
                 <SkeletonItem width={120} height={20} />
@@ -69,12 +73,10 @@ const WorkoutSkeleton = () => (
             </View>
             <SkeletonItem width={40} height={40} borderRadius={20} />
         </View>
-        {/* Carousel */}
         <View style={{ flexDirection: 'row', gap: 15 }}>
-            <GlassCard style={{ width: 150, height: 160, padding: 15, justifyContent: 'space-between' }}><View/></GlassCard>
-            <GlassCard style={{ width: 150, height: 160, padding: 15, justifyContent: 'space-between' }}><View/></GlassCard>
+            <GlassCard style={{ width: 150, height: 160, padding: 15 }}><View/></GlassCard>
+            <GlassCard style={{ width: 150, height: 160, padding: 15 }}><View/></GlassCard>
         </View>
-        {/* Liste */}
         <View style={{ gap: 10, marginTop: 10 }}>
             <SkeletonItem width={100} height={14} />
             <SkeletonItem width="100%" height={80} borderRadius={16} />
@@ -83,59 +85,29 @@ const WorkoutSkeleton = () => (
     </View>
 );
 
-// --- COMPOSANTS UI ---
-
-const MissionCard = ({ day, isActive, onPress, index }: any) => {
+// --- COMPOSANT EXERCICE (AMÉLIORÉ) ---
+const TacticalExercise = ({ exercise, index, isSessionActive, data, onUpdate }: any) => {
   const { colors, isDark } = useTheme();
-  
-  const titleColor = isDark ? colors.text : '#1e293b';
-  const subColor = isDark ? colors.textSecondary : '#64748b';
-  const activeColor = isDark ? colors.primary : '#2563eb'; 
-
-  return (
-    <TouchableOpacity 
-      onPress={() => { if (Platform.OS !== 'web') Haptics.selectionAsync(); onPress(); }}
-      activeOpacity={0.8}
-      style={{ marginRight: 15 }}
-    >
-      <GlassCard 
-        variant={isActive ? "neon" : "default"}
-        style={{ width: 150, height: 160, justifyContent: 'space-between', padding: 15 }}
-      >
-        {isActive && <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, backgroundColor: activeColor }} />}
-        
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ color: isActive ? activeColor : subColor, fontWeight: isActive ? '900' : '600', fontSize: 11, letterSpacing: 1 }}>
-                {day.day ? day.day.toUpperCase().slice(0, 3) : `J${index + 1}`}
-            </Text>
-            {isActive && <Ionicons name="radio-button-on" size={12} color={activeColor} />}
-        </View>
-        
-        <View style={{ flex: 1, justifyContent: 'center' }}>
-            <Text style={{ color: titleColor, fontSize: 16, fontWeight: '800', lineHeight: 20 }} numberOfLines={3}>
-                {day.focus || "Repos"}
-            </Text>
-        </View>
-        
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <MaterialCommunityIcons name="dumbbell" size={14} color={subColor} />
-            <Text style={{ color: subColor, fontSize: 10, fontWeight: 'bold' }}>
-                {(day.exercises?.length || 0)} EXOS
-            </Text>
-        </View>
-      </GlassCard>
-    </TouchableOpacity>
-  );
-};
-
-const TacticalExercise = ({ exercise, index, isSessionActive, isCompleted, onToggle }: any) => {
-  const { colors, isDark } = useTheme();
-  const [expanded, setExpanded] = useState(false);
+  // On ouvre par défaut si la session est active mais pas encore validée
+  const [expanded, setExpanded] = useState(isSessionActive && !data.done);
 
   const openDemo = async () => {
       if (Platform.OS !== 'web') Haptics.selectionAsync();
       const query = encodeURIComponent(`${exercise.name} exercise form tutorial`);
       await Linking.openURL(`https://www.youtube.com/results?search_query=${query}`);
+  };
+
+  const toggleStatus = () => {
+      const isDone = !data.done;
+      if (isDone && Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Auto-fill intelligent si on valide
+      const newWeight = data.weight || "0"; 
+      // On extrait les chiffres des reps (ex: "10-12" -> "10")
+      const targetReps = exercise.reps ? String(exercise.reps).split('-')[0].trim() : "10";
+      const newReps = data.reps || targetReps;
+
+      onUpdate({ ...data, done: isDone, weight: newWeight, reps: newReps });
   };
 
   const cardBg = isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF';
@@ -146,66 +118,96 @@ const TacticalExercise = ({ exercise, index, isSessionActive, isCompleted, onTog
 
   return (
     <Animated.View entering={FadeInDown.delay(index * 50).springify()} style={{ marginBottom: 12 }}>
-        <View 
-            style={[
-                styles.exerciseCard, 
-                { 
-                    backgroundColor: cardBg,
-                    borderColor: borderColor,
-                    opacity: isCompleted ? 0.5 : 1,
-                    borderWidth: 1,
-                    elevation: 0,
-                    shadowOpacity: 0
-                }
-            ]}
+        <View style={[styles.exerciseCard, { 
+                backgroundColor: cardBg, 
+                borderColor: data.done ? colors.success : borderColor, // Bordure verte si fait
+                opacity: (isSessionActive && data.done) ? 0.6 : 1,
+                borderWidth: data.done ? 1.5 : 1
+            }]}
         >
+            {/* EN-TÊTE CLIQUABLE */}
             <TouchableOpacity onPress={() => setExpanded(!expanded)} style={styles.exerciseHeader} activeOpacity={0.7}>
                 <View style={{flex: 1}}>
-                    <Text style={[styles.exName, { color: titleColor, textDecorationLine: isCompleted ? 'line-through' : 'none' }]}>
+                    <Text style={[styles.exName, { color: titleColor, textDecorationLine: data.done ? 'line-through' : 'none' }]}>
                         {exercise.name}
                     </Text>
                     <View style={styles.exMetaRow}>
                         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-                            <Text style={[styles.exMeta, { color: metaColor }]}>{exercise.sets} SÉRIES</Text>
+                            <Text style={[styles.exMeta, { color: metaColor }]}>{exercise.sets} SETS</Text>
                         </View>
                         <Text style={{ color: isDark ? colors.textSecondary : '#94a3b8', fontSize: 10 }}>•</Text>
                         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
                             <Text style={[styles.exMeta, { color: metaColor }]}>{exercise.reps} REPS</Text>
                         </View>
+                        {/* Affichage du poids enregistré si validé */}
+                        {data.done && (
+                            <>
+                                <Text style={{ color: isDark ? colors.textSecondary : '#94a3b8', fontSize: 10 }}>•</Text>
+                                <Text style={[styles.exMeta, { color: colors.success }]}>{data.weight}kg</Text>
+                            </>
+                        )}
                     </View>
                 </View>
                 
                 {isSessionActive ? (
                     <TouchableOpacity 
-                        onPress={onToggle} 
-                        style={[
-                            styles.checkBtn, 
-                            { 
-                                borderColor: isCompleted ? colors.success : borderColor, 
-                                backgroundColor: isCompleted ? colors.success : 'transparent',
-                                transform: [{scale: isCompleted ? 1.1 : 1}]
-                            }
-                        ]}
+                        onPress={toggleStatus} 
+                        style={[styles.checkBtn, { 
+                            borderColor: data.done ? colors.success : borderColor, 
+                            backgroundColor: data.done ? colors.success : 'transparent',
+                        }]}
                     >
-                        {isCompleted && <Ionicons name="checkmark" size={18} color="#fff" />}
+                        {data.done && <Ionicons name="checkmark" size={18} color="#fff" />}
                     </TouchableOpacity>
                 ) : (
                     <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={isDark ? colors.textSecondary : '#94a3b8'} />
                 )}
             </TouchableOpacity>
             
+            {/* DÉTAILS & INPUTS */}
             {expanded && (
-                <View style={[styles.exerciseDetails, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : '#f8fafc', borderTopColor: borderColor }]}>
-                    <View style={styles.detailRow}>
+                <View style={[styles.exerciseDetails, { borderTopColor: borderColor, backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : '#f8fafc' }]}>
+                    
+                    {/* INPUTS DE PERFORMANCE (Visibles seulement si session active) */}
+                    {isSessionActive && (
+                        <View style={styles.inputRow}>
+                            <View style={{flex: 1}}>
+                                <Text style={[styles.inputLabel, {color: isDark ? colors.textSecondary : '#64748b'}]}>CHARGE (KG)</Text>
+                                <TextInput 
+                                    style={[styles.statInput, { color: titleColor, borderColor: borderColor, backgroundColor: isDark ? '#000' : '#fff' }]}
+                                    keyboardType="numeric"
+                                    placeholder="0"
+                                    placeholderTextColor={isDark ? '#444' : '#ccc'}
+                                    value={data.weight}
+                                    onChangeText={(t) => onUpdate({...data, weight: t})}
+                                />
+                            </View>
+                            <View style={{flex: 1}}>
+                                <Text style={[styles.inputLabel, {color: isDark ? colors.textSecondary : '#64748b'}]}>REPS FAITES</Text>
+                                <TextInput 
+                                    style={[styles.statInput, { color: titleColor, borderColor: borderColor, backgroundColor: isDark ? '#000' : '#fff' }]}
+                                    keyboardType="numeric"
+                                    placeholder={String(exercise.reps).split('-')[0]}
+                                    placeholderTextColor={isDark ? '#444' : '#ccc'}
+                                    value={data.reps}
+                                    onChangeText={(t) => onUpdate({...data, reps: t})}
+                                />
+                            </View>
+                        </View>
+                    )}
+
+                    <View style={[styles.detailRow, {marginTop: 15}]}>
                         <MaterialCommunityIcons name="timer-sand" size={14} color={colors.warning} />
                         <Text style={[styles.detailText, { color: isDark ? colors.textSecondary : '#64748b' }]}>Repos: {exercise.rest}s</Text>
                     </View>
+                    
                     {exercise.notes && (
                         <View style={[styles.detailRow, { alignItems: 'flex-start' }]}>
                             <MaterialCommunityIcons name="information-outline" size={14} color={colors.primary} style={{marginTop: 2}} />
                             <Text style={[styles.detailText, { color: isDark ? colors.textSecondary : '#64748b', flex: 1 }]}>{exercise.notes}</Text>
                         </View>
                     )}
+                    
                     <TouchableOpacity onPress={openDemo} style={[styles.demoBtn, { borderColor: borderColor }]}>
                         <MaterialCommunityIcons name="youtube" size={16} color="#ef4444" />
                         <Text style={[styles.demoText, { color: titleColor }]}>VOIR LA DÉMO</Text>
@@ -217,6 +219,7 @@ const TacticalExercise = ({ exercise, index, isSessionActive, isCompleted, onTog
   );
 };
 
+// --- COMPOSANT PRINCIPAL ---
 export default function WorkoutScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
@@ -231,20 +234,17 @@ export default function WorkoutScreen() {
   const isLoading = profileLoading || isPlansLoading;
 
   const [userFocus, setUserFocus] = useState('');
-  
-  // ✅ INITIALISATION INTELLIGENTE : Pointer sur le jour actuel
   const [activeDayIndex, setActiveDayIndex] = useState(getTodayIndex());
   
   const [isSessionActive, setIsSessionActive] = useState(false);
-  const [completedExercises, setCompletedExercises] = useState<Record<string, boolean>>({});
   const [isRegenerating, setIsRegenerating] = useState(false);
 
-  // --- ACTIONS ---
+  // STATE DES EXERCICES : Record<index, ExerciseInput>
+  const [exercisesData, setExercisesData] = useState<Record<string, ExerciseInput>>({});
 
   const handleGenerate = async () => {
     if (!userFocus.trim()) return Alert.alert("Cible Manquante", "Définissez un objectif.");
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
     try {
       await generateWorkout(userProfile, userFocus);
       setUserFocus('');
@@ -257,41 +257,51 @@ export default function WorkoutScreen() {
   const handleStartSession = () => {
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsSessionActive(true);
-    setCompletedExercises({});
+    // On initialise le state pour tous les exos du jour
+    // (Optionnel, on peut laisser vide et remplir à la volée)
   };
 
-  const toggleExercise = (index: number) => {
-    if (Platform.OS !== 'web') Haptics.selectionAsync();
-    const key = `ex_${index}`;
-    setCompletedExercises(prev => ({ ...prev, [key]: !prev[key] }));
+  const handleUpdateExercise = (index: number, data: ExerciseInput) => {
+      setExercisesData(prev => ({ ...prev, [`ex_${index}`]: data }));
   };
 
   const handleFinish = async () => {
     if (!activePlan?.content?.days) return;
     const currentDay = activePlan.content.days[activeDayIndex];
     
+    // On construit le payload propre
     const exercisesDone: any[] = [];
     currentDay.exercises.forEach((ex: any, idx: number) => {
-        if (completedExercises[`ex_${idx}`]) {
-            exercisesDone.push({ name: ex.name, sets: ex.sets, reps: ex.reps, weight: 0 });
+        const input = exercisesData[`ex_${idx}`];
+        if (input && input.done) {
+            exercisesDone.push({
+                name: ex.name,
+                sets: ex.sets, // Idéalement on laisserait l'user changer ça aussi
+                reps: input.reps || ex.reps,
+                weight: input.weight || 0
+            });
         }
     });
 
-    if (exercisesDone.length === 0) return Alert.alert("Mission Vide", "Aucun objectif validé.");
+    if (exercisesDone.length === 0) return Alert.alert("Mission Vide", "Aucun exercice validé.");
 
-    await saveWorkout({
+    const result = await saveWorkout({
         logDate: new Date().toISOString().split('T')[0],
         exercisesDone,
         note: `${activePlan.content.title} - ${currentDay.focus}`
     });
 
-    setIsSessionActive(false);
-    Alert.alert("Mission Accomplie", "Données tactiques enregistrées.");
-    if (isPremium) router.push('/features/workout_log' as any);
+    if (result.success) {
+        setIsSessionActive(false);
+        setExercisesData({}); // Reset
+        Alert.alert("Mission Accomplie", "Données tactiques enregistrées.");
+        if (isPremium) router.push('/features/workout_log' as any);
+    } else {
+        Alert.alert("Erreur Sauvegarde", result.error || "Une erreur est survenue.");
+    }
   };
 
-  // --- RENDERERS ---
-
+  // --- RENDU ---
   const renderGenerator = () => (
     <Animated.View entering={FadeInUp.springify()}>
         <View style={[styles.generatorCard, { borderColor: isDark ? colors.border : '#e2e8f0', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#fff' }]}>
@@ -338,14 +348,14 @@ export default function WorkoutScreen() {
 
       return (
           <View>
+              {/* Header du Plan */}
               <View style={styles.planHeader}>
                   <View style={{ flex: 1 }}>
                       <Text style={[styles.planTitle, { color: isDark ? colors.text : '#0f172a' }]} numberOfLines={1}>{content.title}</Text>
                       <Text style={[styles.planSub, { color: isSessionActive ? colors.success : colors.primary }]}>
-                          {isSessionActive ? "🟢 MISSION EN COURS" : `PLAN ACTIF • ${content.days.length} JOURS`}
+                          {isSessionActive ? "🟢 SÉQUENCE ACTIVE" : `PLAN OPÉRATIONNEL • ${content.days.length} JOURS`}
                       </Text>
                   </View>
-                  
                   {!isSessionActive && (
                       <GlassButton 
                         icon="refresh" 
@@ -355,30 +365,35 @@ export default function WorkoutScreen() {
                   )}
               </View>
 
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={{ paddingVertical: 10, paddingBottom: 25, paddingLeft: 5 }}
-              >
+              {/* Jours */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 10, paddingBottom: 25, paddingLeft: 5 }}>
                   {content.days.map((d: any, i: number) => (
-                      <MissionCard 
-                        key={i} day={d} index={i}
-                        isActive={activeDayIndex === i}
-                        onPress={() => !isSessionActive && setActiveDayIndex(i)} 
-                      />
+                      <TouchableOpacity 
+                        key={i} 
+                        onPress={() => { if(!isSessionActive) { Haptics.selectionAsync(); setActiveDayIndex(i); }}}
+                        style={{ marginRight: 15 }}
+                      >
+                        <GlassCard variant={activeDayIndex === i ? "neon" : "default"} style={{ width: 140, height: 100, padding: 15, justifyContent:'center' }}>
+                            <Text style={{ color: activeDayIndex === i ? colors.primary : (isDark ? colors.textSecondary : '#64748b'), fontWeight:'900', fontSize:10 }}>JOUR {i+1}</Text>
+                            <Text style={{ color: isDark ? colors.text : '#0f172a', fontWeight:'bold', fontSize:14, marginTop:4 }} numberOfLines={2}>
+                                {d.focus || "Repos"}
+                            </Text>
+                        </GlassCard>
+                      </TouchableOpacity>
                   ))}
               </ScrollView>
 
-              <View style={{ marginBottom: 20, marginTop: 5 }}>
+              {/* Liste Exercices */}
+              <View style={{ marginBottom: 20 }}>
                   <Text style={{color: isDark ? colors.textSecondary : '#64748b', fontSize: 10, fontWeight: 'bold', marginBottom: 10, marginLeft: 5, letterSpacing: 1}}>
-                      SÉQUENCE OPÉRATIONNELLE ({day.exercises?.length || 0})
+                      EXERCICES ({day.exercises?.length || 0})
                   </Text>
                   {day.exercises?.map((ex: any, i: number) => (
                       <TacticalExercise 
                         key={i} index={i} exercise={ex}
                         isSessionActive={isSessionActive}
-                        isCompleted={!!completedExercises[`ex_${i}`]}
-                        onToggle={() => toggleExercise(i)}
+                        data={exercisesData[`ex_${i}`] || { done: false, weight: '', reps: '' }}
+                        onUpdate={(d: ExerciseInput) => handleUpdateExercise(i, d)}
                       />
                   ))}
               </View>
@@ -388,16 +403,8 @@ export default function WorkoutScreen() {
 
   return (
     <ScreenLayout>
-        <Image 
-            source={require('../../assets/adaptive-icon.png')} 
-            style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02 }]}
-            blurRadius={40}
-            contentFit="cover"
-        />
-        <LinearGradient 
-            colors={isDark ? [colors.primary, 'transparent'] : ['#bfdbfe', 'transparent']} 
-            style={{position:'absolute', top:0, left:0, right:0, height:200, opacity: isDark ? 0.1 : 0.3}} 
-        />
+        <Image source={require('../../assets/adaptive-icon.png')} style={[StyleSheet.absoluteFillObject, { opacity: isDark ? 0.05 : 0.02 }]} blurRadius={40} contentFit="cover"/>
+        <LinearGradient colors={isDark ? [colors.primary, 'transparent'] : ['#bfdbfe', 'transparent']} style={{position:'absolute', top:0, left:0, right:0, height:200, opacity: isDark ? 0.1 : 0.3}} />
 
         <View style={styles.header}>
             <Text style={[styles.headerTitle, {color: isDark ? colors.text : '#0f172a'}]}>CENTRE TACTIQUE</Text>
@@ -406,15 +413,12 @@ export default function WorkoutScreen() {
             </TouchableOpacity>
         </View>
 
-        <ScrollView 
-            style={{ flex: 1 }} 
-            contentContainerStyle={[styles.content, { paddingBottom: 150 }]} 
-            showsVerticalScrollIndicator={false}
-        >
-            {isLoading ? <WorkoutSkeleton /> : ((activePlan && !isRegenerating) ? renderActivePlan() : renderGenerator())}
-        </ScrollView>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex:1}}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.content, { paddingBottom: 150 }]} showsVerticalScrollIndicator={false}>
+                {isLoading ? <WorkoutSkeleton /> : ((activePlan && !isRegenerating) ? renderActivePlan() : renderGenerator())}
+            </ScrollView>
+        </KeyboardAvoidingView>
 
-        {/* --- FLOATING FOOTER --- */}
         {(activePlan && !isRegenerating) && (
             <LinearGradient 
                 colors={isDark ? ['transparent', 'rgba(0,0,0,0.9)', '#000'] : ['transparent', 'rgba(255,255,255,0.9)', '#FFFFFF']} 
@@ -431,7 +435,7 @@ export default function WorkoutScreen() {
                     )
                 ) : (
                     <NeonButton 
-                        label={isSaving ? "SYNCHRONISATION..." : "TERMINER MISSION"} 
+                        label={isSaving ? "ENREGISTREMENT..." : "TERMINER MISSION"} 
                         icon="stop" onPress={handleFinish} 
                         style={{ backgroundColor: colors.danger, borderColor: colors.danger, width: '100%' }} 
                     />
@@ -468,6 +472,10 @@ const styles = StyleSheet.create({
     checkBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
     
     exerciseDetails: { padding: 15, paddingTop: 10, paddingBottom: 20, borderTopWidth: 1 },
+    inputRow: { flexDirection: 'row', gap: 15, marginTop: 5 },
+    inputLabel: { fontSize: 9, fontWeight: '900', marginBottom: 6, letterSpacing: 0.5 },
+    statInput: { height: 44, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, fontSize: 16, fontWeight: 'bold' },
+
     detailRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
     detailText: { fontSize: 12 },
 

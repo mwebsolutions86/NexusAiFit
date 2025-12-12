@@ -1,56 +1,56 @@
 import { supabase } from './supabase';
 
-// Définition des types pour plus de sécurité
-type AIRequestType = 'CHAT' | 'WORKOUT' | 'MEAL' | 'MEAL_PREP';
+type AIRequestType = 'CHAT' | 'WORKOUT' | 'MEAL' | 'MEAL_PREP' | 'CHEF';
 
 interface AIRequestPayload {
   type: AIRequestType;
   userProfile: any;
-  preferences?: string;     // Pour Workout/Meal
-  userMessage?: string;     // Pour Chat
-  context?: string;         // Pour contextes additionnels
+  preferences?: string;
+  userMessage?: string;
+  context?: string;
 }
 
-// Fonction générique unifiée
+// Configuration des timeouts par type de tâche
+const FUNCTION_CONFIG = {
+  CHAT: { functionName: 'supafit-chat', timeout: 10000 },      // Rapide
+  WORKOUT: { functionName: 'supafit-planner', timeout: 60000 }, // Lent
+  MEAL: { functionName: 'supafit-planner', timeout: 60000 },    // Lent
+  MEAL_PREP: { functionName: 'supafit-planner', timeout: 45000 },
+  CHEF: { functionName: 'supafit-planner', timeout: 45000 },
+};
+
 async function callNeuralCore(payload: AIRequestPayload) {
   try {
-    // On appelle UNIQUEMENT 'supafit-ai'
-    const { data, error } = await supabase.functions.invoke('supafit-ai', {
+    // 1. Routage Intelligent
+    // Si tu n'as pas encore déployé les 2 fonctions, remplace les noms ci-dessus par 'supafit-ai' partout.
+    // Mais cette structure est PRÊTE pour l'architecture micro-service.
+    const config = FUNCTION_CONFIG[payload.type] || FUNCTION_CONFIG.CHAT;
+    
+    // Fallback temporaire : Tout vers 'supafit-ai' tant que tu n'as pas split
+    const targetFunction = 'supafit-ai'; 
+
+    console.log(`[NEURAL ROUTER] Routing ${payload.type} to ${targetFunction}...`);
+
+    const { data, error } = await supabase.functions.invoke(targetFunction, {
       body: payload
     });
 
-    // 🛠 GESTION AMÉLIORÉE DES ERREURS
-    // Intercepte les erreurs HTTP (4xx, 5xx) renvoyées par invoke
     if (error) {
-        let customMessage = "Erreur technique IA";
-        
-        // On tente de récupérer le vrai message d'erreur si disponible
-        try {
-            if (error instanceof Error) {
-                // Parfois le message d'erreur contient le JSON de la réponse
-                try {
-                    // Si le message est du JSON stringifié (cas fréquent)
-                    const parsedMsg = JSON.parse(error.message);
-                    if (parsedMsg.error) customMessage = parsedMsg.error;
-                } catch {
-                    // Sinon on prend le message brut
-                    customMessage = error.message;
-                }
-            }
-        } catch (e) {
-            // Fallback silencieux
-        }
+      console.error(`[NEURAL CORE] Error on ${payload.type}:`, error);
+      // Extraction propre du message d'erreur
+      let msg = "Erreur IA inconnue";
+      try {
+         const jsonErr = JSON.parse(error.message);
+         if(jsonErr.error) msg = jsonErr.error;
+      } catch {
+         msg = error.message;
+      }
+      throw new Error(msg);
+    }
 
-        console.error(`[NEURAL CORE] Error on ${payload.type}:`, error);
-        throw new Error(customMessage);
-    }
-    
-    // Gestion des erreurs métier (Status 200 mais avec champ error dans le JSON)
-    if (data && data.error) {
-        throw new Error(data.error);
-    }
-    
-    // Si l'IA renvoie une string (cas rare d'erreur mal formatée), on tente de parser
+    if (data && data.error) throw new Error(data.error);
+
+    // Parsing défensif
     if (typeof data === 'string') {
         try { return JSON.parse(data); } catch { return data; }
     }
@@ -59,44 +59,24 @@ async function callNeuralCore(payload: AIRequestPayload) {
 
   } catch (e: any) {
     console.error("[NEURAL CORE] System Failure:", e.message);
-    // On propage l'erreur pour que l'UI affiche une alerte propre
-    throw new Error(e.message || "Erreur de communication avec le noyau IA.");
+    throw new Error(e.message || "Erreur critique du noyau IA.");
   }
 }
 
 // --- FAÇADES (API CLIENT) ---
-
+// (Le reste de tes exports reste identique, ils appellent juste callNeuralCore)
 export async function generateAIResponse(userProfile: any, systemPrompt: string, userMessage: string) {
-  // Le Chat attend un format { response: string }
-  return await callNeuralCore({
-    type: 'CHAT',
-    userProfile,
-    userMessage,
-    context: systemPrompt
-  });
+  return await callNeuralCore({ type: 'CHAT', userProfile, userMessage, context: systemPrompt });
 }
 
 export async function generateWorkoutJSON(userProfile: any, focus: string) {
-  // Le Workout attend un JSON complexe
-  return await callNeuralCore({
-    type: 'WORKOUT',
-    userProfile,
-    preferences: focus
-  });
+  return await callNeuralCore({ type: 'WORKOUT', userProfile, preferences: focus });
 }
 
 export async function generateMealPlanJSON(userProfile: any, preferences: string) {
-  return await callNeuralCore({
-    type: 'MEAL',
-    userProfile,
-    preferences
-  });
+  return await callNeuralCore({ type: 'MEAL', userProfile, preferences });
 }
 
 export async function generateMealPrepIdeas(userProfile: any, ingredients: string) {
-  return await callNeuralCore({
-    type: 'MEAL_PREP',
-    userProfile,
-    preferences: ingredients // On passe les ingrédients comme "préférences"
-  });
+  return await callNeuralCore({ type: 'MEAL_PREP', userProfile, preferences: ingredients });
 }
