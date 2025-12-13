@@ -1,12 +1,11 @@
-// app/_layout.tsx
 import '../lib/i18n'; 
 import React, { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { ThemeProvider, useTheme } from '../lib/theme'; 
-import { AlertProvider } from '../lib/AlertContext'; // ✅ IMPORT
-import * as Linking from 'expo-linking';
+// ✅ On importe le Provider corrigé
+import { AlertProvider } from '../lib/AlertContext'; 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '../lib/react-query';
 
@@ -31,7 +30,6 @@ export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // ... (Ton code deep link existant)
     setIsReady(true);
   }, []);
 
@@ -46,7 +44,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        {/* ✅ ENVELOPPE AVEC ALERT PROVIDER */}
+        {/* ✅ L'AlertProvider englobe TOUTE l'application ici */}
         <AlertProvider>
             <AppContent />
         </AlertProvider>

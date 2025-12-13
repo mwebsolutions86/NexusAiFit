@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, memo } from 'react';
 import { 
   View, 
   Text, 
@@ -9,7 +9,6 @@ import {
   RefreshControl, 
   Platform, 
   Dimensions, 
-  Alert, 
   LayoutAnimation, 
   UIManager,
   Modal 
@@ -17,7 +16,6 @@ import {
 import { Image } from 'expo-image';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-// ✅ CORRECTION ICI : Ajout de useAnimatedStyle
 import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedProps, withTiming, withRepeat, withSequence, useAnimatedStyle } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -36,6 +34,7 @@ import { useNutritionLog } from '../../hooks/useNutritionLog';
 import { useNutritionMutations } from '../../hooks/useNutritionMutations';
 import { useActivePlans } from '../../hooks/useActivePlans';
 import FoodJournal from '../../app/features/food-journal'; 
+import { useAlert } from '../../lib/AlertContext';
 
 const { width } = Dimensions.get('window');
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -52,10 +51,10 @@ const getTodayIndex = () => {
 // --- 🕒 UTILITAIRE "SMART TIME" ---
 const getTimeContext = () => {
     const hour = new Date().getHours();
-    if (hour < 10) return { label: "PETIT DÉJEUNER", icon: "cafe-outline" };
-    if (hour < 14) return { label: "DÉJEUNER", icon: "restaurant-outline" };
-    if (hour < 18) return { label: "SNACK / GOÛTER", icon: "nutrition-outline" };
-    return { label: "DÎNER", icon: "moon-outline" };
+    if (hour < 10) return { label: "PETIT DÉJEUNER", icon: "cafe-outline", keyword: "PETIT" };
+    if (hour < 14) return { label: "DÉJEUNER", icon: "restaurant-outline", keyword: "DÉJEUNER" };
+    if (hour < 18) return { label: "SNACK / GOÛTER", icon: "nutrition-outline", keyword: "SNACK" };
+    return { label: "DÎNER", icon: "moon-outline", keyword: "DÎNER" };
 };
 
 // --- 📊 COMPOSANT JAUGE CIRCULAIRE ---
@@ -111,6 +110,48 @@ const CircularProgress = ({ value, total, size = 80, strokeWidth = 8, color, lab
     );
 };
 
+// --- 🛡️ MEMOIZED HUD COMPONENT (LE FIX ANTI-FREEZE) ---
+// On isole la carte lourde (Glass + Animations) pour qu'elle ne re-render pas si les chiffres ne changent pas
+// --- DÉFINITION DU TYPE DES PROPS ---
+interface DailySummaryHUDProps {
+  cals: number;
+  prot: number;
+  target: number;
+  isDark: boolean;
+  colors: any; // On met 'any' pour éviter des erreurs complexes avec votre thème
+}
+
+// --- LE COMPOSANT CORRIGÉ POUR TYPESCRIPT ---
+const DailySummaryHUD = memo(({ cals, prot, target, isDark, colors }: DailySummaryHUDProps) => {
+  return (
+    <GlassCard 
+      style={[styles.hudCard, { backgroundColor: isDark ? 'rgba(20,20,30,0.6)' : '#FFFFFF' }]} 
+      intensity={isDark ? 30 : 50}
+    >
+      <View style={styles.hudRow}>
+        <CircularProgress 
+          value={cals} total={target} label="KCAL" color={colors.warning} 
+          delay={100} size={90} strokeWidth={10} 
+        />
+        <View style={[styles.verticalDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0' }]} />
+        <CircularProgress 
+          value={prot} total={180} label="PROT" color={colors.primary} 
+          delay={200} size={90} strokeWidth={10} 
+        />
+      </View>
+    </GlassCard>
+  );
+}, (prev: DailySummaryHUDProps, next: DailySummaryHUDProps) => {
+  // TypeScript sait maintenant que 'prev' et 'next' contiennent 'cals', 'prot', etc.
+  return (
+    prev.cals === next.cals &&
+    prev.prot === next.prot &&
+    prev.target === next.target &&
+    prev.isDark === next.isDark
+  );
+});
+
+
 // --- 👻 SKELETON ---
 const SkeletonItem = ({ style, width, height, borderRadius = 8 }: any) => {
     const { colors, isDark } = useTheme();
@@ -118,7 +159,6 @@ const SkeletonItem = ({ style, width, height, borderRadius = 8 }: any) => {
     useEffect(() => {
         opacity.value = withRepeat(withSequence(withTiming(0.6, {duration:800}), withTiming(0.3, {duration:800})), -1, true);
     }, []);
-    // ✅ UTILISATION CORRECTE MAINTENANT
     const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
     const bgColor = isDark ? colors.primary + '20' : '#cbd5e1'; 
     return <Animated.View style={[{ backgroundColor: bgColor, width, height, borderRadius, overflow: 'hidden' }, style, animatedStyle]} />;
@@ -147,6 +187,7 @@ const NutritionSkeleton = () => (
 export default function NutritionScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
+  const { showAlert } = useAlert();
   
   const today = new Date().toISOString().split('T')[0];
   const [preferences, setPreferences] = useState('');
@@ -162,10 +203,10 @@ export default function NutritionScreen() {
   const [activeTab, setActiveTab] = useState(todayIndex);
   const [showJournal, setShowJournal] = useState(false);
   
-  // 👨‍🍳 STATE RECETTE
   const [selectedRecipe, setSelectedRecipe] = useState<any>(null);
   
-  const timeContext = getTimeContext();
+  // ✅ FIX 1: Memoize le timeContext pour éviter de recréer l'objet à chaque render
+  const timeContext = useMemo(() => getTimeContext(), []);
 
   const consumedMap = useMemo(() => {
     const map: Record<string, boolean> = {};
@@ -177,10 +218,11 @@ export default function NutritionScreen() {
     return map;
   }, [log]);
 
-  const dailyStats = {
+  // ✅ FIX 2: Memoize les stats pour éviter les boucles infinies de rendu
+  const dailyStats = useMemo(() => ({
       cals: log?.total_calories || 0,
       prot: log?.total_protein || 0
-  };
+  }), [log?.total_calories, log?.total_protein]);
 
   const dayTarget = useMemo(() => {
       const content = (activePlanData?.content || activePlanData) as any;
@@ -206,7 +248,7 @@ export default function NutritionScreen() {
           await generateNutrition({ userProfile, preferences: context });
           setPreferences('');
       } catch (e: any) {
-          Alert.alert("Erreur", e.message);
+          showAlert({ title: "Erreur IA", message: e.message, type: "error" });
       }
   };
 
@@ -215,23 +257,41 @@ export default function NutritionScreen() {
       refetch();
   };
 
-  // ⚡ GESTION INTELLIGENTE DU CLIC
   const handleMealPress = (item: any, mealName: string, isEditable: boolean) => {
-      // 1. Priorité : Ouvrir la Recette si elle existe (ingrédients ou instructions)
       if (item.preparation || (item.ingredients && Array.isArray(item.ingredients))) {
           if (Platform.OS !== 'web') Haptics.selectionAsync();
-          // On attache mealName pour pouvoir valider depuis la modale
           setSelectedRecipe({ ...item, mealName }); 
           return;
       }
 
-      // 2. Sinon : Comportement classique (Check/Uncheck)
       if (!isEditable) {
           if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           return;
       }
-      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      toggleItem.mutate({ item, mealName: mealName, currentLog: log || null });
+
+      const isTimeMatching = mealName.toUpperCase().includes(timeContext.keyword);
+      
+      const executeToggle = () => {
+          if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          toggleItem.mutate({ item, mealName: mealName, currentLog: log || null });
+      };
+
+      if (!isTimeMatching) {
+          showAlert({
+              title: "Déjà mangé ?",
+              message: `Ce repas (${mealName}) ne correspond pas à l'heure actuelle (${timeContext.label}). Voulez-vous le noter maintenant ?`,
+              type: "warning",
+              buttons: [
+                  { text: "Attendre", style: "cancel" },
+                  { 
+                      text: "Oui, noter", 
+                      onPress: executeToggle 
+                  }
+              ]
+          });
+      } else {
+          executeToggle();
+      }
   };
 
   const toggleJournalDrawer = () => {
@@ -306,7 +366,21 @@ export default function NutritionScreen() {
                           )
                       })}
                   </ScrollView>
-                  <GlassButton icon="refresh" onPress={() => { Alert.alert("Nouveau Menu ?", "Générer un nouveau plan remplacera l'actuel.", [{text:"Annuler"}, {text:"Générer", onPress: handleGenerate}]); }} size={20} />
+                  <GlassButton 
+                    icon="refresh" 
+                    onPress={() => { 
+                        showAlert({
+                            title: "Nouveau Menu ?",
+                            message: "Générer un nouveau plan remplacera l'actuel.",
+                            type: "warning",
+                            buttons: [
+                                {text:"Annuler", style:"cancel"}, 
+                                {text:"Générer", onPress: handleGenerate}
+                            ]
+                        });
+                    }} 
+                    size={20} 
+                  />
               </View>
 
               {!isEditable && (
@@ -319,7 +393,7 @@ export default function NutritionScreen() {
               <View style={{ gap: 16, paddingHorizontal: 20 }}>
                   {day.meals && day.meals.map((meal: any, idx: number) => {
                       const mealCals = meal.items ? meal.items.reduce((acc: number, i: any) => acc + (parseInt(i.calories, 10) || 0), 0) : 0;
-                      const isContextual = isEditable && activeTab === todayIndex && meal.name.toUpperCase().includes(timeContext.label.split(' ')[0]);
+                      const isContextual = isEditable && activeTab === todayIndex && meal.name.toUpperCase().includes(timeContext.keyword);
 
                       return (
                           <Animated.View key={idx} entering={FadeInDown.delay(idx * 100).springify()}>
@@ -346,7 +420,6 @@ export default function NutritionScreen() {
                                     {meal.items && meal.items.map((item: any, i: number) => {
                                         const key = `${meal.name}_${item.name}`;
                                         const isChecked = !!consumedMap[key];
-                                        // Détection si recette dispo pour l'icône
                                         const hasRecipe = item.preparation || (item.ingredients && item.ingredients.length > 0);
 
                                         return (
@@ -419,23 +492,15 @@ export default function NutritionScreen() {
                 <Animated.View entering={FadeInUp}><NutritionSkeleton /></Animated.View>
             ) : (
                 <>
+                    {/* ✅ UTILISATION DU HUD MEMOIZÉ */}
                     {activeTab === todayIndex && (
-                        <GlassCard 
-                            style={[styles.hudCard, { backgroundColor: isDark ? 'rgba(20,20,30,0.6)' : '#FFFFFF' }]} 
-                            intensity={isDark ? 30 : 50}
-                        >
-                            <View style={styles.hudRow}>
-                                <CircularProgress 
-                                    value={dailyStats.cals} total={dayTarget} label="KCAL" color={colors.warning} 
-                                    delay={100} size={90} strokeWidth={10} 
-                                />
-                                <View style={[styles.verticalDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0' }]} />
-                                <CircularProgress 
-                                    value={dailyStats.prot} total={180} label="PROT" color={colors.primary} 
-                                    delay={200} size={90} strokeWidth={10} 
-                                />
-                            </View>
-                        </GlassCard>
+                       <DailySummaryHUD 
+                          cals={dailyStats.cals} 
+                          prot={dailyStats.prot} 
+                          target={dayTarget} 
+                          isDark={isDark} 
+                          colors={colors} 
+                       />
                     )}
 
                     <View style={{ marginTop: 10 }}>
@@ -519,15 +584,34 @@ export default function NutritionScreen() {
 
                         <View style={{height:20}}/>
                         
-                        {/* BOUTON VALIDATION */}
+                        {/* BOUTON VALIDATION AVEC PROTECTION HORAIRE */}
                         {activeTab === todayIndex && (
                             <NeonButton 
                                 label="J'AI MANGÉ CE REPAS"
                                 icon="check"
                                 onPress={() => {
-                                    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                    toggleItem.mutate({ item: selectedRecipe, mealName: selectedRecipe.mealName || "Manuel", currentLog: log || null });
-                                    setSelectedRecipe(null);
+                                    const mealName = selectedRecipe.mealName || "Manuel";
+                                    const isTimeMatching = mealName.toUpperCase().includes(timeContext.keyword);
+                                    
+                                    const execute = () => {
+                                        if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                        toggleItem.mutate({ item: selectedRecipe, mealName, currentLog: log || null });
+                                        setSelectedRecipe(null);
+                                    };
+
+                                    if (!isTimeMatching) {
+                                         showAlert({
+                                            title: "Déjà mangé ?",
+                                            message: `Ce repas (${mealName}) ne semble pas correspondre à l'heure actuelle (${timeContext.label}).`,
+                                            type: "warning",
+                                            buttons: [
+                                                { text: "Annuler", style: "cancel" },
+                                                { text: "Confirmer", onPress: execute }
+                                            ]
+                                        });
+                                    } else {
+                                        execute();
+                                    }
                                 }}
                                 style={{backgroundColor: colors.success}}
                             />

@@ -6,7 +6,6 @@ import {
   FlatList, 
   TextInput, 
   TouchableOpacity, 
-  KeyboardAvoidingView, 
   Platform
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -23,7 +22,7 @@ import { NeonButton } from '../../components/ui/NeonButton';
 import { useShoppingList } from '../../hooks/useShoppingList';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { useActivePlans } from '../../hooks/useActivePlans';
-import { useAlert } from '../../lib/AlertContext';
+import { useAlert } from '../../lib/AlertContext'; // ✅ IMPORT DU SYSTÈME CUSTOM
 
 const getTodayIndex = () => {
   const day = new Date().getDay(); 
@@ -33,7 +32,7 @@ const getTodayIndex = () => {
 export default function ShoppingScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
-  const { showAlert } = useAlert();
+  const { showAlert } = useAlert(); // ✅ HOOK POUR L'ALERTE CENTRÉE
   const [newItem, setNewItem] = useState('');
 
   const { items, isLoading, addItem, toggleItem, deleteItem, generateFromPlan, clearList } = useShoppingList();
@@ -51,6 +50,7 @@ export default function ShoppingScreen() {
     }
 
     if (!daysData) {
+        // Alerte d'erreur centrée
         showAlert({ title: "Plan Introuvable", message: "Générez d'abord un plan Nutrition.", type: "error" });
         return;
     }
@@ -77,9 +77,9 @@ export default function ShoppingScreen() {
          return;
     }
 
+    // Succès Silencieux (Vibration)
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     generateFromPlan.mutate(allIngredients);
-    showAlert({ title: "Liste Importée", message: "Votre liste a été mise à jour avec les ingrédients de la semaine.", type: "success" });
   };
 
   const handleAddItem = () => {
@@ -90,13 +90,21 @@ export default function ShoppingScreen() {
   };
 
   const handleClear = () => {
+      // ✅ ALERTE CENTRÉE DE CONFIRMATION
       showAlert({
           title: "Tout supprimer ?",
-          message: "Voulez-vous vraiment vider toute la liste de courses ?",
+          message: "Voulez-vous vraiment vider toute la liste ?",
           type: "warning",
           buttons: [
               { text: "Annuler", style: "cancel" },
-              { text: "Supprimer", style: "destructive", onPress: () => clearList.mutate() }
+              { 
+                  text: "Supprimer", 
+                  style: "destructive", 
+                  onPress: () => {
+                      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      clearList.mutate();
+                  } 
+              }
           ]
       });
   };
@@ -111,6 +119,7 @@ export default function ShoppingScreen() {
                 toggleItem.mutate({ id: item.id, is_checked: isChecked });
             }}
             onLongPress={() => {
+                // Suppression unitaire silencieuse
                 if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
                 deleteItem.mutate(item.id);
             }}
